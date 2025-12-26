@@ -13,6 +13,13 @@
 #include "esp_random.h"
 #include "esp_mac.h"
 #include "sys/time.h"
+#include <math.h>
+#include <float.h>
+
+// 定义M_PI常量（如果未定义）
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 static const char *TAG = "CN_C-RID_STD";
 
@@ -473,12 +480,30 @@ static void send_beacon_task(void *pvParameter) {
 
             // 模拟位置变化 (每10秒更新一次位置)
             ESP_LOGI(TAG, "================ 模拟位置变化 (每10秒更新一次位置) ================");
-            demo_lat += 0.000001f; // 约1.1米
-            demo_lon += 0.000001f; // 约0.9米
-            demo_alt += 0.001f;    // 0.1m/s climb
-            demo_speed_h = demo_speed_h + (esp_random() % 100 - 50.0f) / 50.0f; // 5-7 m/s
-            demo_speed_v = (esp_random() % 100 - 50) / 100.0f;  // -0.5 to +0.5 m/s
-            demo_heading = (demo_heading + 1.0f) > 360.0f ? 1.0f : (demo_heading + 1.0f);
+            // 使用时间作为参数来计算巡游位置，创建圆形路径
+            static float time_counter = 0.0f;
+            time_counter += 1.0f; // 每10秒增加1
+            
+            // 使用正弦和余弦函数创建巡游路径
+            float radius_lat = 0.00005f; // 纬度方向巡游半径 (约5.5米)
+            float radius_lon = 0.00004f; // 经度方向巡游半径 (约4.4米)
+            
+            // 计算新的位置（圆形路径）
+            demo_lat = g_config.latitude + radius_lat * cosf(time_counter * 0.2f);
+            demo_lon = g_config.longitude + radius_lon * sinf(time_counter * 0.2f);
+            
+            // 模拟高度变化（轻微波动）
+            demo_alt = g_config.altitude_msl + 0.5f * sinf(time_counter * 0.1f);
+            
+            // 更新速度和航向以匹配巡游运动
+            demo_speed_h = 1.5f + 0.5f * sinf(time_counter * 0.1f); // 在1.0-2.0 m/s之间变化
+            demo_speed_v = 0.1f * cosf(time_counter * 0.1f);  // 轻微垂直速度变化
+            
+            // 计算航向角（基于运动方向）
+            float dx = radius_lon * cosf(time_counter * 0.2f) * 0.2f;
+            float dy = -radius_lat * sinf(time_counter * 0.2f) * 0.2f;
+            demo_heading = atan2f(dy, dx) * 180.0f / M_PI;
+            if (demo_heading < 0) demo_heading += 360.0f;
             
             update_position_data(demo_lat, demo_lon, demo_alt, demo_alt - 5, 
                                demo_speed_h, demo_speed_v, demo_heading);
