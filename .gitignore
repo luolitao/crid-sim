@@ -1,3 +1,1 @@
-build/
-sdkconfig
-sdkconfig.old
+Nothing should be ignored based on the provided file changes. The only modified file is README.md, which is a source/config file and should not be added to .gitignore.
