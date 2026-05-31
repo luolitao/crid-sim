@@ -31,6 +31,27 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
 void crid_build_system_message(const cn_crid_config_t *config, uint8_t *message);
 
 /**
+ * @brief 构建 Self-Description 报文 (25 字节，符合试行标准表5)
+ * @param config 配置结构体指针
+ * @param message 输出缓冲区 (至少 25 字节)
+ */
+void crid_build_self_desc_message(const cn_crid_config_t *config, uint8_t *message);
+
+/**
+ * @brief 构建 Authentication 报文 (25 字节，符合 ASTM F3411)
+ * @param config 配置结构体指针
+ * @param message 输出缓冲区 (至少 25 字节)
+ */
+void crid_build_auth_message(const cn_crid_config_t *config, uint8_t *message);
+
+/**
+ * @brief 构建 Operator ID 报文 (25 字节，符合 ASTM F3411)
+ * @param config 配置结构体指针
+ * @param message 输出缓冲区 (至少 25 字节)
+ */
+void crid_build_operator_id_message(const cn_crid_config_t *config, uint8_t *message);
+
+/**
  * @brief 构建完整的 Beacon 帧 (包含打包报文)
  * @param config 配置结构体指针
  * @param frame 输出帧缓冲区

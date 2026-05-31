@@ -23,7 +23,7 @@
 static const char *TAG = "CN_C-RID_STD";
 
 // --- 全局 Beacon 帧缓冲区（仅在发送任务中使用） ---
-#define BEACON_FRAME_BUF_SIZE 256
+#define BEACON_FRAME_BUF_SIZE 512
 static uint8_t g_beacon_frame[BEACON_FRAME_BUF_SIZE];
 static uint16_t g_beacon_frame_len = 0;
 
@@ -123,7 +123,12 @@ void app_main(void) {
     }
 
     ESP_LOGI(TAG, "Transmitter started successfully!");
-    ESP_LOGI(TAG, "  UAS ID: %s", g_config.uas_id);
+    ESP_LOGI(TAG, "  UAS ID (Model): %s", g_config.uas_id);
+    ESP_LOGI(TAG, "  Drone Name: %s", g_config.drone_name);
+    ESP_LOGI(TAG, "  Operator ID: %s", g_config.operator_id);
+    ESP_LOGI(TAG, "  MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+             g_config.mac_address[0], g_config.mac_address[1], g_config.mac_address[2],
+             g_config.mac_address[3], g_config.mac_address[4], g_config.mac_address[5]);
     ESP_LOGI(TAG, "  Position: %.6f, %.6f", g_config.latitude, g_config.longitude);
     ESP_LOGI(TAG, "  Channel: %u, Interval: %ums", g_config.channel, DEFAULT_BEACON_INTERVAL_MS);
     ESP_LOGI(TAG, "  OUI: FA:0B:BC, Vendor Type: 0x0D (GB42590-2023)");

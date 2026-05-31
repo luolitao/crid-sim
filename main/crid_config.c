@@ -1,5 +1,8 @@
 #include "crid_config.h"
 #include <string.h>
+#include <stdio.h>
+#include "esp_system.h"
+#include "esp_mac.h"
 #include "esp_log.h"
 
 static const char *TAG = "CN_C-RID_CFG";
@@ -12,10 +15,29 @@ void crid_config_init_default(cn_crid_config_t *config) {
 
     memset(config, 0, sizeof(cn_crid_config_t));
 
-    strncpy(config->uas_id, "CAAC-ESP32-CN-001", CRID_UAS_ID_MAX_LEN);
+    // --- 从硬件获取 MAC 地址 ---
+    esp_err_t mac_ret = esp_efuse_mac_get_default(config->mac_address);
+    if (mac_ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get MAC address, using fallback");
+        config->mac_address[0] = 0x24;
+        config->mac_address[1] = 0x0A;
+        config->mac_address[2] = 0xC4;
+        config->mac_address[3] = 0x12;
+        config->mac_address[4] = 0x34;
+        config->mac_address[5] = 0x57;
+    }
+
+    // 提取 MAC 地址最后 4 位（即后 2 字节）作为后缀
+    // 例如 MAC 24:0A:C4:12:34:57 -> 后缀 "3457"
+    char mac_suffix[5];
+    snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X",
+             config->mac_address[4], config->mac_address[5]);
+
+    // --- UAS ID / 无人机型号: 填写为 ESP32S3 ---
+    strncpy(config->uas_id, "ESP32S3", CRID_UAS_ID_MAX_LEN);
     config->uas_id[CRID_UAS_ID_MAX_LEN] = '\0';
 
-    config->id_type = ID_TYPE_CAA_REGISTRATION;
+    config->id_type = ID_TYPE_SERIAL_NUMBER;
     config->ua_type = UA_TYPE_HELICOPTER;
 
     // 越秀山坐标
@@ -32,16 +54,20 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->operator_lon = 113.26f;
     config->operator_alt = 10.0f;
 
-    // MAC 地址
-    config->mac_address[0] = 0x24;
-    config->mac_address[1] = 0x0A;
-    config->mac_address[2] = 0xC4;
-    config->mac_address[3] = 0x12;
-    config->mac_address[4] = 0x34;
-    config->mac_address[5] = 0x57;
+    // 飞手名字: 前缀 "OP-CAAC-" + MAC 后 4 位
+    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "OP-CAAC-%s", mac_suffix);
 
-    strncpy(config->ssid, "CN-CRID-ESP", CRID_SSID_MAX_LEN);
-    config->ssid[CRID_SSID_MAX_LEN] = '\0';
+    // 无人机名字: 前缀 "CRID-" + MAC 后 4 位
+    snprintf(config->drone_name, CRID_UAS_ID_MAX_LEN + 1, "CRID-%s", mac_suffix);
+
+    config->operator_location_type = OP_LOC_TYPE_LIVE_GNSS; // Dynamic
+    config->classification_type = CLASSIFICATION_UNDECLARED;
+    config->category_eu = 0;
+    config->class_eu = 0;
+    config->height_type = HEIGHT_REF_OVER_TAKEOFF;
+
+    // SSID 后缀也用 MAC 后 4 位
+    snprintf(config->ssid, CRID_SSID_MAX_LEN + 1, "CN-CRID-%s", mac_suffix);
 
     config->channel = DEFAULT_WIFI_CHANNEL;
     config->message_counter = 0;
@@ -49,14 +75,20 @@ void crid_config_init_default(cn_crid_config_t *config) {
     // 巡游参数
     config->base_latitude = config->latitude;
     config->base_longitude = config->longitude;
+    config->base_altitude_msl = config->altitude_msl;
     config->patrol_radius_lat = 0.00005f;  // 约 5.5 米
     config->patrol_radius_lon = 0.00004f;  // 约 4.4 米
     config->patrol_speed = 0.2f;
     config->time_counter = 0.0f;
 
     ESP_LOGI(TAG, "China C-RID configuration initialized");
-    ESP_LOGI(TAG, "  UAS ID: %s", config->uas_id);
-    ESP_LOGI(TAG, "  ID Type: %d (CAA Registration ID)", config->id_type);
+    ESP_LOGI(TAG, "  MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+             config->mac_address[0], config->mac_address[1], config->mac_address[2],
+             config->mac_address[3], config->mac_address[4], config->mac_address[5]);
+    ESP_LOGI(TAG, "  UAS ID (Model): %s", config->uas_id);
+    ESP_LOGI(TAG, "  Drone Name: %s", config->drone_name);
+    ESP_LOGI(TAG, "  Operator ID: %s", config->operator_id);
+    ESP_LOGI(TAG, "  ID Type: %d (Serial Number)", config->id_type);
     ESP_LOGI(TAG, "  UA Type: %d (Helicopter/Multirotor)", config->ua_type);
     ESP_LOGI(TAG, "  Position: %.6f, %.6f", config->latitude, config->longitude);
 }

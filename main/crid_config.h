@@ -7,11 +7,13 @@
 extern "C" {
 #endif
 
-// --- 报文类型 (符合试行标准表1) ---
+// --- 报文类型 (符合 ASTM F3411 / ASD-STAN 4709-002) ---
 #define MSG_TYPE_BASIC_ID    0x0  // 基本 ID 报文
 #define MSG_TYPE_LOCATION    0x1  // 位置向量报文
+#define MSG_TYPE_AUTH        0x2  // 认证报文
 #define MSG_TYPE_SELF_DESC   0x3  // 运行描述报文
 #define MSG_TYPE_SYSTEM      0x4  // 系统报文
+#define MSG_TYPE_OPERATOR_ID 0x5  // 操作员 ID 报文
 #define MSG_TYPE_PACKED      0xF  // 报文打包
 
 // --- ID 类型 ---
@@ -39,12 +41,30 @@ extern "C" {
 #define UA_TYPE_GROUND_OBSTACLE  14
 #define UA_TYPE_OTHER            15
 
-// --- 运行状态 ---
-#define STATUS_UNDECLARED    0
-#define STATUS_GROUND        1
-#define STATUS_AIRBORNE      2
-#define STATUS_EMERGENCY     3
-#define STATUS_REMOTE_ID_FAIL 4
+// --- 运行状态 (ASTM F3411) ---
+#define STATUS_UNDECLARED         0
+#define STATUS_GROUND             1
+#define STATUS_AIRBORNE           2
+#define STATUS_EMERGENCY          3
+#define STATUS_REMOTE_ID_FAIL     4
+
+// --- 高度参考类型 ---
+#define HEIGHT_REF_OVER_TAKEOFF   0
+#define HEIGHT_REF_OVER_GROUND    1
+
+// --- 操作员位置类型 ---
+#define OP_LOC_TYPE_TAKEOFF       0
+#define OP_LOC_TYPE_LIVE_GNSS     1
+#define OP_LOC_TYPE_FIXED         2
+
+// --- 分类类型 ---
+#define CLASSIFICATION_UNDECLARED 0
+#define CLASSIFICATION_EU         1
+
+// --- 描述类型 ---
+#define DESC_TYPE_TEXT            0
+#define DESC_TYPE_EMERGENCY       1
+#define DESC_TYPE_EXTENDED_STATUS 2
 
 // --- 报文常量 ---
 #define CRID_MESSAGE_SIZE      25     // 每条报文 25 字节
@@ -64,9 +84,10 @@ extern "C" {
 
 // --- 配置结构体 ---
 typedef struct {
-    char uas_id[CRID_UAS_ID_MAX_LEN + 1];  // UAS ID (符合中国民航局格式)
+    char uas_id[CRID_UAS_ID_MAX_LEN + 1];  // UAS ID / 无人机型号
     uint8_t id_type;                         // ID 类型 (0-4)
     uint8_t ua_type;                         // 无人机类型 (0-15)
+    char drone_name[CRID_UAS_ID_MAX_LEN + 1]; // 无人机名字 (Self-ID 描述)
     float latitude;                          // 纬度
     float longitude;                         // 经度
     float altitude_msl;                      // 海拔高度 (m)
@@ -77,7 +98,13 @@ typedef struct {
     uint8_t status;                          // 运行状态 (0-4)
     float operator_lat;                      // 操作员纬度
     float operator_lon;                      // 操作员经度
-    float operator_alt;                      // 操作员高度
+    float operator_alt;                      // 操作员高度 (m)
+    char operator_id[CRID_UAS_ID_MAX_LEN + 1]; // 操作员 ID
+    uint8_t operator_location_type;          // 操作员位置类型 (0=Takeoff, 1=Live GNSS, 2=Fixed)
+    uint8_t classification_type;             // 分类类型 (0=Undeclared, 1=EU)
+    uint8_t category_eu;                     // EU 类别 (0=Undeclared, 1=Open, 2=Specific, 3=Certified)
+    uint8_t class_eu;                        // EU 等级 (0-7)
+    uint8_t height_type;                     // 高度参考类型 (0=Takeoff, 1=Ground)
     uint8_t mac_address[6];                  // MAC 地址
     char ssid[CRID_SSID_MAX_LEN + 1];        // SSID
     uint8_t channel;                         // 通道
@@ -86,6 +113,7 @@ typedef struct {
     // 巡游参数
     float base_latitude;                     // 基准纬度
     float base_longitude;                    // 基准经度
+    float base_altitude_msl;                 // 基准海拔高度 (m)
     float patrol_radius_lat;                 // 纬度方向巡游半径
     float patrol_radius_lon;                 // 经度方向巡游半径
     float patrol_speed;                      // 巡游速度参数
