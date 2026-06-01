@@ -28,14 +28,13 @@ void crid_config_init_default(cn_crid_config_t *config) {
     }
 
     // 提取 MAC 地址最后 4 位（即后 2 字节）作为后缀
-    // 例如 MAC 24:0A:C4:12:34:57 -> 后缀 "3457"
+    // 例如 MAC 24:0A:C4:12:34:56 -> 后缀 "3456"
     char mac_suffix[5];
     snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X",
              config->mac_address[4], config->mac_address[5]);
 
-    // --- UAS ID / 无人机型号: 填写为 ESP32S3 ---
-    strncpy(config->uas_id, "ESP32S3", CRID_UAS_ID_MAX_LEN);
-    config->uas_id[CRID_UAS_ID_MAX_LEN] = '\0';
+    // --- UAS ID / 无人机唯一标识: 前缀 "CRID-" + MAC 后 4 位 ---
+    snprintf(config->uas_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-CRID-%s", mac_suffix);
 
     config->id_type = ID_TYPE_SERIAL_NUMBER;
     config->ua_type = UA_TYPE_HELICOPTER;
@@ -55,10 +54,11 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->operator_alt = 10.0f;
 
     // 飞手名字: 前缀 "OP-CAAC-" + MAC 后 4 位
-    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "OP-CAAC-%s", mac_suffix);
+    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-OP-%s", mac_suffix);
 
-    // 无人机名字: 前缀 "CRID-" + MAC 后 4 位
-    snprintf(config->drone_name, CRID_UAS_ID_MAX_LEN + 1, "CRID-%s", mac_suffix);
+    // 无人机名字/型号 (Self-ID 描述): 填写为 ESP32S3
+    strncpy(config->drone_name, "ESP32S3", CRID_UAS_ID_MAX_LEN);
+    config->drone_name[CRID_UAS_ID_MAX_LEN] = '\0';
 
     config->operator_location_type = OP_LOC_TYPE_LIVE_GNSS; // Dynamic
     config->classification_type = CLASSIFICATION_UNDECLARED;
@@ -67,7 +67,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->height_type = HEIGHT_REF_OVER_TAKEOFF;
 
     // SSID 后缀也用 MAC 后 4 位
-    snprintf(config->ssid, CRID_SSID_MAX_LEN + 1, "CN-CRID-%s", mac_suffix);
+    snprintf(config->ssid, CRID_SSID_MAX_LEN + 1, "ESP32-CRID-%s", mac_suffix);
 
     config->channel = DEFAULT_WIFI_CHANNEL;
     config->message_counter = 0;
@@ -85,8 +85,8 @@ void crid_config_init_default(cn_crid_config_t *config) {
     ESP_LOGI(TAG, "  MAC: %02X:%02X:%02X:%02X:%02X:%02X",
              config->mac_address[0], config->mac_address[1], config->mac_address[2],
              config->mac_address[3], config->mac_address[4], config->mac_address[5]);
-    ESP_LOGI(TAG, "  UAS ID (Model): %s", config->uas_id);
-    ESP_LOGI(TAG, "  Drone Name: %s", config->drone_name);
+    ESP_LOGI(TAG, "  UAS ID: %s", config->uas_id);
+    ESP_LOGI(TAG, "  Drone Model (Self-ID): %s", config->drone_name);
     ESP_LOGI(TAG, "  Operator ID: %s", config->operator_id);
     ESP_LOGI(TAG, "  ID Type: %d (Serial Number)", config->id_type);
     ESP_LOGI(TAG, "  UA Type: %d (Helicopter/Multirotor)", config->ua_type);

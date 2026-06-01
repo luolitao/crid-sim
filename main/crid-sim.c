@@ -20,7 +20,7 @@
 #include "crid_wifi.h"
 #include "crid_patrol.h"
 
-static const char *TAG = "CN_C-RID_STD";
+static const char *TAG = "ESP32_CRID_STD";
 
 // --- 全局 Beacon 帧缓冲区（仅在发送任务中使用） ---
 #define BEACON_FRAME_BUF_SIZE 512

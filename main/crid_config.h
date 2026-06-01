@@ -84,10 +84,10 @@ extern "C" {
 
 // --- 配置结构体 ---
 typedef struct {
-    char uas_id[CRID_UAS_ID_MAX_LEN + 1];  // UAS ID / 无人机型号
+    char uas_id[CRID_UAS_ID_MAX_LEN + 1];  // UAS ID / 无人机唯一标识 (序列号，填入 Basic ID 报文)
     uint8_t id_type;                         // ID 类型 (0-4)
     uint8_t ua_type;                         // 无人机类型 (0-15)
-    char drone_name[CRID_UAS_ID_MAX_LEN + 1]; // 无人机名字 (Self-ID 描述)
+    char drone_name[CRID_UAS_ID_MAX_LEN + 1]; // 无人机型号 (Self-ID 描述报文)
     float latitude;                          // 纬度
     float longitude;                         // 经度
     float altitude_msl;                      // 海拔高度 (m)
