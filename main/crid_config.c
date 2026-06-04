@@ -24,7 +24,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
         config->mac_address[2] = 0xC4;
         config->mac_address[3] = 0x12;
         config->mac_address[4] = 0x34;
-        config->mac_address[5] = 0x57;
+        config->mac_address[5] = 0x56;
     }
 
     // 提取 MAC 地址最后 4 位（即后 2 字节）作为后缀
@@ -33,7 +33,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
     snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X",
              config->mac_address[4], config->mac_address[5]);
 
-    // --- UAS ID / 无人机唯一标识: 前缀 "CRID-" + MAC 后 4 位 ---
+    // --- UAS ID / 无人机唯一标识: 前缀 "ESP32CRID-" + MAC 后 4 位 ---
     snprintf(config->uas_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-CRID-%s", mac_suffix);
 
     config->id_type = ID_TYPE_SERIAL_NUMBER;
@@ -53,8 +53,8 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->operator_lon = 113.26f;
     config->operator_alt = 10.0f;
 
-    // 飞手名字: 前缀 "OP-CAAC-" + MAC 后 4 位
-    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-OP-%s", mac_suffix);
+    // 飞手名字: 前缀 "ESP32-CRID-OP-" + MAC 后 4 位
+    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-CRID-OP-%s", mac_suffix);
 
     // 无人机名字/型号 (Self-ID 描述): 填写为 ESP32S3
     strncpy(config->drone_name, "ESP32S3", CRID_UAS_ID_MAX_LEN);
