@@ -1,8 +1,8 @@
 # This file was generated using idf.py save-defconfig. It can be edited manually.
 # Espressif IoT Development Framework (ESP-IDF) Project Minimal Configuration
 #
-CONFIG_BT_ENABLED=y
-CONFIG_BT_BLE_50_FEATURES_SUPPORTED=n
-CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y
-# CONFIG_BT_LE_50_FEATURE_SUPPORT is not used on ESP32, ESP32-C3 and ESP32-S3.
-# CONFIG_BT_LE_50_FEATURE_SUPPORT is not set
+# 1. 强制单核模式 (保持之前的修复)
+CONFIG_FREERTOS_UNICORE=y
+
+# 2. 禁用蓝牙 (单核下更稳定，如果您的项目不需要蓝牙)
+CONFIG_BT_ENABLED=n

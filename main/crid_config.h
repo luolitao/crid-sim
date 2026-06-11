@@ -1,11 +1,45 @@
+#pragma once
+
 #ifndef CRID_CONFIG_H
 #define CRID_CONFIG_H
-
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdint.h>
+#include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
+#define CRID_NVS_NAMESPACE "crid_storage"
+
+// 飞行轨迹模式枚举
+typedef enum {
+    FLIGHT_MODE_CIRCLE = 0,     // 1. 经典圆形巡游
+    FLIGHT_MODE_PINGPONG,       // 2. 直线往返 (A-B 点)
+    FLIGHT_MODE_S_SEARCH,       // 3. S型搜索 (扫海/扫地)
+    FLIGHT_MODE_MAX
+} crid_flight_mode_t;
+
+// 动态配置结构体
+typedef struct {
+    double init_lat;            // 起飞点/中心点 纬度
+    double init_lon;            // 起飞点/中心点 经度
+    float  speed;               // 仿真飞行速度
+    uint8_t flight_mode;        // 飞行模式 (对应 crid_flight_mode_t)
+    uint8_t channel;            // Wi-Fi 广播信道
+} crid_dynamic_config_t;
+
+// 外部全局变量，供发射任务和 CLI 任务动态读写（加锁或原子操作更佳，此处简化演示）
+extern crid_dynamic_config_t g_crid_config;
+extern SemaphoreHandle_t g_crid_config_mutex;
+
+// 函数声明
+esp_err_t crid_nvs_init(void);
+esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg);
+esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg);
+void crid_cli_init(void);
 
 // --- 报文类型 (符合 ASTM F3411 / ASD-STAN 4709-002) ---
 #define MSG_TYPE_BASIC_ID    0x0  // 基本 ID 报文

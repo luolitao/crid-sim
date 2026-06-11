@@ -1,12 +1,83 @@
 #include "crid_patrol.h"
 #include <math.h>
 #include "esp_log.h"
+#include "crid_config.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 static const char *TAG = "CN_C-RID_PATROL";
+static uint32_t flight_tick = 0;
+
+/**
+ * 多模式轨迹状态机计算引擎
+ * @param out_lat 计算得到的当前纬度输出
+ * @param out_lon 计算得到的当前经度输出
+ * @param out_heading 当前航向角输出 (0~360度)
+ */
+void crid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading) {
+    flight_tick++;
+    double base_lat;
+    double base_lon;
+    float speed_factor;
+    uint8_t flight_mode;
+
+    if (g_crid_config_mutex != NULL) {
+        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
+    }
+    base_lat = g_crid_config.init_lat;
+    base_lon = g_crid_config.init_lon;
+    speed_factor = g_crid_config.speed;
+    flight_mode = g_crid_config.flight_mode;
+    if (g_crid_config_mutex != NULL) {
+        xSemaphoreGive(g_crid_config_mutex);
+    }
+
+    switch (flight_mode) {
+        case FLIGHT_MODE_CIRCLE: {
+            // 1. 经典圆形巡游模式
+            double radius = 0.0005; // 约 50 米半径
+            double angle = (flight_tick * speed_factor * 0.1); 
+            
+            *out_lat = base_lat + radius * sin(angle);
+            *out_lon = base_lon + radius * cos(angle);
+            // 航向角正切推导
+            *out_heading = (float)fmod((angle * 180.0 / M_PI) + 90.0, 360.0);
+            break;
+        }
+
+        case FLIGHT_MODE_PINGPONG: {
+            // 2. 直线往返模式（在东西方向进行拉锯飞行）
+            double max_distance = 0.001; // 往返半程最大跨度
+            double phase = sin(flight_tick * speed_factor * 0.05);
+            
+            *out_lat = base_lat; 
+            *out_lon = base_lon + (max_distance * phase);
+            // 航向角根据极性直接切向 90度（东）或 270度（西）
+            *out_heading = (cos(flight_tick * speed_factor * 0.05) >= 0) ? 90.0f : 270.0f;
+            break;
+        }
+
+        case FLIGHT_MODE_S_SEARCH: {
+            // 3. S型搜索模式 ( Lissajous 曲线变种模拟格子扫荡 )
+            double scale_x = 0.001;
+            double scale_y = 0.0003;
+            double t = flight_tick * speed_factor * 0.02;
+
+            *out_lat = base_lat + scale_y * sin(t * 4.0); // 纵向高频摆动
+            *out_lon = base_lon + scale_x * sin(t);       // 横向低频主线
+            *out_heading = (float)fmod(t * 180.0 / M_PI, 360.0);
+            break;
+        }
+
+        default:
+            *out_lat = base_lat;
+            *out_lon = base_lon;
+            *out_heading = 0.0f;
+            break;
+    }
+}
 
 void crid_patrol_step(cn_crid_config_t *config) {
     if (config == NULL) return;

@@ -4,8 +4,71 @@
 #include "esp_system.h"
 #include "esp_mac.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+
 
 static const char *TAG = "CN_C-RID_CFG";
+crid_dynamic_config_t g_crid_config;
+SemaphoreHandle_t g_crid_config_mutex = NULL;
+
+esp_err_t crid_nvs_init(void) {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+
+    if (ret == ESP_OK && g_crid_config_mutex == NULL) {
+        g_crid_config_mutex = xSemaphoreCreateMutex();
+        if (g_crid_config_mutex == NULL) {
+            ESP_LOGE(TAG, "Failed to create config mutex");
+            return ESP_FAIL;
+        }
+    }
+
+    return ret;
+}
+
+esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg) {
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        // 如果找不到存储，赋予默认值（默认广州越秀山，经典圆形）
+        cfg->init_lat = 23.14287;
+        cfg->init_lon = 113.26026;
+        cfg->speed = 0.2f;
+        cfg->flight_mode = FLIGHT_MODE_CIRCLE;
+        cfg->channel = 6;
+        ESP_LOGW(TAG, "NVS space empty. Loaded default factory config.");
+        return ESP_OK;
+    }
+
+    size_t size = sizeof(crid_dynamic_config_t);
+    err = nvs_get_blob(handle, "config_blob", cfg, &size);
+    nvs_close(handle);
+    
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Config successfully loaded from NVS.");
+    } else {
+        ESP_LOGE(TAG, "Failed to read blob from NVS: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg) {
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+
+    err = nvs_set_blob(handle, "config_blob", cfg, sizeof(crid_dynamic_config_t));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+        ESP_LOGI(TAG, "Config saved and committed to NVS.");
+    }
+    nvs_close(handle);
+    return err;
+}
 
 void crid_config_init_default(cn_crid_config_t *config) {
     if (config == NULL) {
@@ -16,16 +79,21 @@ void crid_config_init_default(cn_crid_config_t *config) {
     memset(config, 0, sizeof(cn_crid_config_t));
 
     // --- 从硬件获取 MAC 地址 ---
-    esp_err_t mac_ret = esp_efuse_mac_get_default(config->mac_address);
+    //esp_err_t mac_ret = esp_efuse_mac_get_default(config->mac_address);
+    //if (mac_ret != ESP_OK) {
+    //    ESP_LOGE(TAG, "Failed to get MAC address, using fallback");
+    config->mac_address[0] = 0x24;
+    config->mac_address[1] = 0x0A;
+    config->mac_address[2] = 0xC4;
+    config->mac_address[3] = 0x12;
+    config->mac_address[4] = 0x34;
+    config->mac_address[5] = 0x56;
+
+    esp_err_t mac_ret = esp_base_mac_addr_set(config->mac_address);
     if (mac_ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get MAC address, using fallback");
-        config->mac_address[0] = 0x24;
-        config->mac_address[1] = 0x0A;
-        config->mac_address[2] = 0xC4;
-        config->mac_address[3] = 0x12;
-        config->mac_address[4] = 0x34;
-        config->mac_address[5] = 0x56;
+        ESP_LOGW(TAG, "Failed to set base MAC: %s", esp_err_to_name(mac_ret));
     }
+    //}
 
     // 提取 MAC 地址最后 4 位（即后 2 字节）作为后缀
     // 例如 MAC 24:0A:C4:12:34:56 -> 后缀 "3456"

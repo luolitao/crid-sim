@@ -270,23 +270,25 @@ void crid_build_operator_id_message(const cn_crid_config_t *config, uint8_t *mes
     ESP_LOGD(TAG, "Operator ID message built (%s)", config->operator_id);
 }
 
-bool crid_build_beacon_frame(cn_crid_config_t *config,
+bool crid_build_beacon_frame(const cn_crid_config_t *config,
+                              uint8_t message_counter,
                               uint8_t *frame, uint16_t max_len,
                               uint16_t *out_len) {
     if (config == NULL || frame == NULL || out_len == NULL) return false;
 
     uint16_t pos = 0;
 
-    // --- 预估帧长度，确保不越界 ---
-    // MAC Header: 24 + Timestamp: 8 + Beacon Interval: 2 + Capability: 2 + SSID IE: 2+ssid_len
-    // + Rates IE: 2+8 + DS IE: 3 + Vendor IE: 1+1+3+1+1+3+25*5 = ~216
-    #define BEACON_FRAME_ESTIMATED_LEN 280
-    if (max_len < BEACON_FRAME_ESTIMATED_LEN) {
-        ESP_LOGE(TAG, "Frame buffer too small: %u < %u", max_len, BEACON_FRAME_ESTIMATED_LEN);
-        return false;
-    }
+#define REQUIRE_SPACE(bytes_needed) \
+    do { \
+        if ((uint32_t)pos + (uint32_t)(bytes_needed) > (uint32_t)max_len) { \
+            ESP_LOGE(TAG, "Frame buffer too small at pos=%u need=%u max=%u", \
+                     pos, (unsigned)(bytes_needed), max_len); \
+            return false; \
+        } \
+    } while (0)
 
     // --- MAC Header (24 bytes) ---
+    REQUIRE_SPACE(24);
     frame[pos++] = 0x80; // Type=Management, Subtype=Beacon
     frame[pos++] = 0x00;
     frame[pos++] = 0x00; // Duration
@@ -310,25 +312,34 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
 
     // --- Beacon Body ---
     // Timestamp (8 bytes)
+    REQUIRE_SPACE(8);
     memset(&frame[pos], 0, 8);
     pos += 8;
 
     // Beacon Interval (100ms)
+    REQUIRE_SPACE(2);
     write_le16(&frame[pos], 100);
     pos += 2;
 
     // Capability Information
+    REQUIRE_SPACE(2);
     frame[pos++] = 0x21;
     frame[pos++] = 0x04;
 
     // --- SSID IE ---
-    frame[pos++] = 0x00; // IE ID
     size_t ssid_len = strlen(config->ssid);
+    if (ssid_len > UINT8_MAX) {
+        ESP_LOGE(TAG, "SSID too long: %u", (unsigned)ssid_len);
+        return false;
+    }
+    REQUIRE_SPACE(2 + ssid_len);
+    frame[pos++] = 0x00; // IE ID
     frame[pos++] = (uint8_t)ssid_len;
     memcpy(&frame[pos], config->ssid, ssid_len);
     pos += ssid_len;
 
     // --- Supported Rates IE ---
+    REQUIRE_SPACE(2 + 8);
     frame[pos++] = 0x01; // IE ID
     frame[pos++] = 0x08; // Length
     uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c};
@@ -336,6 +347,7 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
     pos += 8;
 
     // --- DS Parameter Set IE ---
+    REQUIRE_SPACE(3);
     frame[pos++] = 0x03;
     frame[pos++] = 0x01;
     frame[pos++] = config->channel;
@@ -346,6 +358,7 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
     #define PACKED_MSG_COUNT      5
     #define PACKED_MSG_TOTAL_LEN (PACKED_MSG_HEADER_LEN + PACKED_MSG_COUNT * CRID_MESSAGE_SIZE)
 
+    REQUIRE_SPACE(2 + 3 + 1 + 1 + PACKED_MSG_TOTAL_LEN);
     frame[pos++] = 0xDD; // Vendor Specific IE ID
     frame[pos++] = 3 + 1 + 1 + PACKED_MSG_TOTAL_LEN; // OUI(3) + Type(1) + Counter(1) + Packed
 
@@ -358,13 +371,10 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
     frame[pos++] = CRID_VENDOR_TYPE;
 
     // Message Counter（每发送一条报文 +1，255 后回绕到 0）
-    uint8_t msg_counter = config->message_counter;
-    frame[pos++] = msg_counter;
-
-    // 递增 message_counter，uint8_t 自动 0-255 循环回绕
-    config->message_counter++;
+    frame[pos++] = message_counter;
 
     // --- 构建打包消息（5 条报文，不含认证报文，符合 GB42590 / IB-TM-2024-01） ---
+    REQUIRE_SPACE(PACKED_MSG_TOTAL_LEN);
     uint8_t packed_msg[PACKED_MSG_TOTAL_LEN];
     uint8_t packed_pos = 0;
 
@@ -412,6 +422,8 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
     *out_len = pos;
 
     ESP_LOGI(TAG, "Beacon frame built: %u bytes, counter=%u, pos=(%.6f,%.6f)",
-             *out_len, msg_counter, config->latitude, config->longitude);
+             *out_len, message_counter, config->latitude, config->longitude);
     return true;
+
+#undef REQUIRE_SPACE
 }

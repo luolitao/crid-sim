@@ -2,12 +2,18 @@ idf_component_register(
     SRCS
         crid-sim.c
         crid_config.c
+        crid_cli.c
+        crid_ota.c
         crid_messages.c
         crid_wifi.c
         crid_patrol.c
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi
+        driver
+        app_update
+        esp_https_ota
+        esp_http_client
         nvs_flash
         esp_common
         esp_netif
