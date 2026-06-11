@@ -20,6 +20,7 @@
 #include "crid_messages.h"
 #include "crid_wifi.h"
 #include "crid_patrol.h"
+#include "crid_web_ota.h"
 
 static const char *TAG = "CRID_MAIN";
 
@@ -39,6 +40,7 @@ static void crid_send_beacon_task(void *pvParameter) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     // 严格 1Hz 广播周期（通常国内规定为 1000ms 间隔）
     const TickType_t xInterval = pdMS_TO_TICKS(1000); 
+    static uint32_t s_tx_count = 0;
 
     for (;;) {
         // --- 严格 1 秒定时锁定 ---
@@ -50,6 +52,7 @@ static void crid_send_beacon_task(void *pvParameter) {
         double current_lon = 0;
         float current_heading = 0;
         crid_patrol_calculate_next(&current_lat, &current_lon, &current_heading);
+        s_tx_count++;
 
         // 2. 将计算出来的动态经纬度、航向同步更新到实际要打包的报文数据结构中
         crid_config_update_position(&g_beacon_config,
@@ -61,8 +64,10 @@ static void crid_send_beacon_task(void *pvParameter) {
                         g_beacon_config.speed_vertical,
                         current_heading);
 
-        ESP_LOGI(TAG, "[📡 TX POOL] Mode:%d | Lat: %.6f, Lon: %.6f | Heading: %.1f°", 
-                 g_crid_config.flight_mode, current_lat, current_lon, current_heading);
+        if ((s_tx_count % 10U) == 1U) {
+            ESP_LOGI(TAG, "[📡 TX POOL] Mode:%d | Lat: %.6f, Lon: %.6f | Heading: %.1f°", 
+                     g_crid_config.flight_mode, current_lat, current_lon, current_heading);
+        }
 
         // 3. 实时重新构建 5 条国标消息组合成的完整 Beacon 原始数据帧
         uint8_t message_counter = g_beacon_config.message_counter;
@@ -113,15 +118,14 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // 4. 初始化 Wi-Fi 硬件射频驱动，并锁定在配置的目标信道（如 Channel 6）
-    ret = crid_wifi_init(g_crid_config.channel);
+    ret = crid_wifi_init(g_crid_config.channel, g_beacon_config.ssid);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Wi-Fi RF initialization failed: %s", esp_err_to_name(ret));
         return;
     }
 
-    // 5. 启动串口交互式命令行（CLI）接收任务，允许用户通过串口随时动态 SET 参数
-    crid_cli_init();
-    ESP_LOGI(TAG, "Interactive CLI Engine online.");
+    // 5. 启动无线 Web OTA 入口，允许用户通过浏览器直接触发固件更新
+    crid_web_ota_init();
 
     // 6. 创建 1Hz 的核心无人机 Remote ID 动态模拟发射任务
     BaseType_t task_ret = xTaskCreate(crid_send_beacon_task, "cn_crid_tx_task", 4096, NULL, 5, NULL);
@@ -134,6 +138,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "--------------------------------------------------------");
     ESP_LOGI(TAG, "Transmitter dynamic framework deployed successfully!");
     ESP_LOGI(TAG, "Default Target Channel: %u", g_crid_config.channel);
+    ESP_LOGI(TAG, "Web OTA: http://192.168.4.1/");
     ESP_LOGI(TAG, "OUI: FA:0B:BC, Vendor Type: 0x0D (GB42590-2023)");
     ESP_LOGI(TAG, "--------------------------------------------------------");
 

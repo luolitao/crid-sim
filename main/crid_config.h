@@ -3,6 +3,12 @@
 #ifndef CRID_CONFIG_H
 #define CRID_CONFIG_H
 
+#include "sdkconfig.h"
+
+#ifndef CONFIG_LOG_MAXIMUM_LEVEL
+#define CONFIG_LOG_MAXIMUM_LEVEL 3
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -40,6 +46,7 @@ esp_err_t crid_nvs_init(void);
 esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg);
 esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg);
 void crid_cli_init(void);
+void crid_web_ota_init(void);
 
 // --- 报文类型 (符合 ASTM F3411 / ASD-STAN 4709-002) ---
 #define MSG_TYPE_BASIC_ID    0x0  // 基本 ID 报文

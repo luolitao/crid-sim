@@ -168,6 +168,9 @@ void crid_config_update_position(cn_crid_config_t *config,
                                   float heading) {
     if (config == NULL) return;
 
+    static uint32_t s_update_count = 0;
+    s_update_count++;
+
     config->latitude = lat;
     config->longitude = lon;
     config->altitude_msl = alt_msl;
@@ -176,7 +179,9 @@ void crid_config_update_position(cn_crid_config_t *config,
     config->speed_vertical = speed_v;
     config->heading = heading;
 
-    ESP_LOGI(TAG, "Position updated: %.6f, %.6f, Alt: %.2fm, Hdg: %.1f",
-             config->latitude, config->longitude,
-             config->altitude_msl, config->heading);
+    if ((s_update_count % 10U) == 1U) {
+        ESP_LOGI(TAG, "Position updated: %.6f, %.6f, Alt: %.2fm, Hdg: %.1f",
+                 config->latitude, config->longitude,
+                 config->altitude_msl, config->heading);
+    }
 }

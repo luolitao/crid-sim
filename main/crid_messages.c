@@ -1,3 +1,4 @@
+#include "sdkconfig.h"
 #include "crid_messages.h"
 #include <string.h>
 #include <math.h>
@@ -421,8 +422,12 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
 
     *out_len = pos;
 
-    ESP_LOGI(TAG, "Beacon frame built: %u bytes, counter=%u, pos=(%.6f,%.6f)",
-             *out_len, message_counter, config->latitude, config->longitude);
+    static uint32_t s_frame_build_count = 0;
+    s_frame_build_count++;
+    if ((s_frame_build_count % 10U) == 1U) {
+        ESP_LOGI(TAG, "Beacon frame built: %u bytes, counter=%u, pos=(%.6f,%.6f)",
+                 *out_len, message_counter, config->latitude, config->longitude);
+    }
     return true;
 
 #undef REQUIRE_SPACE

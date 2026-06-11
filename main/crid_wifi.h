@@ -14,7 +14,7 @@ extern "C" {
  * @param channel Wi-Fi 信道
  * @return ESP_OK 成功
  */
-esp_err_t crid_wifi_init(uint8_t channel);
+esp_err_t crid_wifi_init(uint8_t channel, const char *ssid);
 
 /**
  * @brief 发送 raw 802.11 帧，带 fallback 机制
