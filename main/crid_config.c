@@ -102,7 +102,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
              config->mac_address[4], config->mac_address[5]);
 
     // --- UAS ID / 无人机唯一标识: 前缀 "ESP32CRID-" + MAC 后 4 位 ---
-    snprintf(config->uas_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-CRID-%s", mac_suffix);
+    snprintf(config->uas_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32GB42750IBTM%s", mac_suffix);
 
     config->id_type = ID_TYPE_SERIAL_NUMBER;
     config->ua_type = UA_TYPE_HELICOPTER;

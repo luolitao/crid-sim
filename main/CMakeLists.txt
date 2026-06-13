@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS
-        crid-sim.c
+        main.c
         crid_config.c
         crid_cli.c
         crid_ota.c
@@ -21,6 +21,7 @@ idf_component_register(
         esp_common
         esp_netif
         esp_event
+        esp_timer
     PRIV_REQUIRES soc)
 
 target_link_libraries(${COMPONENT_LIB} m)

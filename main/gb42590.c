@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "sys/time.h"
 
-static const char *TAG = "CN_C-RID_MSG";
+static const char *TAG = "GB42590_IBTM202401_MSG";
 
 // --- 辅助函数：写入 int32_t 为小端序 ---
 static inline void write_le32(uint8_t *buf, int32_t val) {
@@ -38,16 +38,16 @@ static inline void write_le32_u32(uint8_t *buf, uint32_t val) {
 static uint8_t encode_ground_speed(float speed_ms) {
     if (speed_ms < 0.0f) speed_ms = 0.0f;
     if (speed_ms < 63.75f) {
-        return (uint8_t)(speed_ms * 0.25f);
+        return (uint8_t)(speed_ms / 0.25f);
     } else if (speed_ms <= 254.25f) {
-        return (uint8_t)(255 + (speed_ms * 0.75f) + 63.75f);
+        return (uint8_t)(255 + (speed_ms - 63.75f) / 0.75f);
     } else {
         return 254;
     }
 }
 
 // --- 编码高度 (0.5m 精度，偏移 -1000m) ---
-// 符合 ASTM F3411: encoded = (altitude_m + 1000) / 0.5
+// 符合 IBTM202401: encoded = (altitude_m + 1000) / 0.5
 // 有效范围: -1000m ~ 31767.5m
 // 特殊值: 0 = Invalid/Unknown (-1000m)
 static uint16_t encode_altitude(float altitude_m) {
@@ -94,7 +94,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
 
     // 字节2: 航迹角 (1°/LSB, 0-255 表示 0-255°)
     // 255 = Invalid/Unknown
-    // 注：ASTM F3411 标准为 0.5°/LSB，但此接收端按 1°/LSB 解码
+    // 注：IBTM202401 标准为 0.5°/LSB，但此接收端按 1°/LSB 解码
     uint8_t track_angle;
     if (config->heading < 0 || config->heading >= 360.0f) {
         track_angle = 255; // Invalid
@@ -106,15 +106,8 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
 
     // 字节3: 地速
     message[3] = encode_ground_speed(config->speed_horizontal);
-
-    // 字节4: 垂直速度 (0.5m/s 精度, 偏移 +63)
-    // 编码: (speed_vertical / 0.5) + 63 = speed_vertical * 2 + 63
-    // 范围: -62 ~ +62 m/s -> 编码值 1 ~ 187 (uint8_t)
-    // 无效值: 255 (0xFF)
-    int16_t vs_enc = (int16_t)(config->speed_vertical * 2.0f + 63.0f);
-    if (vs_enc > 187) vs_enc = 187;
-    if (vs_enc < 1) vs_enc = 1;
-    message[4] = (uint8_t)vs_enc;
+  
+    message[4] = (uint8_t)(config->speed_vertical * 2.0f + 63.0f);
 
     // 字节5-8: 纬度 (小端序, 1E-7 度单位)
     write_le32_u32(&message[5], (int32_t)(config->latitude * 1e7));
@@ -223,33 +216,6 @@ void crid_build_self_desc_message(const cn_crid_config_t *config, uint8_t *messa
     ESP_LOGD(TAG, "Self-Description message built (Drone: %s)", config->drone_name);
 }
 
-void crid_build_auth_message(const cn_crid_config_t *config, uint8_t *message) {
-    memset(message, 0, CRID_MESSAGE_SIZE);
-
-    // 报头: [ProtoVersion(4)][MessageType(4)]
-    message[0] = 0x01 | (MSG_TYPE_AUTH << 4);
-    (void)config; // unused when auth is none
-
-    // 字节1: [AuthType(4)][DataPage(4)]
-    message[1] = (0x00 << 4) | 0x00; // AuthType=None, Page=0
-
-    // 字节2: LastPageIndex
-    message[2] = 0;
-
-    // 字节3: Length
-    message[3] = 0;
-
-    // 字节4-7: Timestamp (relative to 2019-01-01)
-    struct timeval tv_auth;
-    gettimeofday(&tv_auth, NULL);
-    uint32_t ts_since_2019 = (uint32_t)(tv_auth.tv_sec - 1546300800);
-    write_le32_u32(&message[4], ts_since_2019);
-
-    // 字节8-24: AuthData (17 bytes for page 0)
-    // 全部置零表示无认证数据
-
-    ESP_LOGD(TAG, "Authentication message built (None)");
-}
 
 void crid_build_operator_id_message(const cn_crid_config_t *config, uint8_t *message) {
     memset(message, 0, CRID_MESSAGE_SIZE);
@@ -354,9 +320,9 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     frame[pos++] = config->channel;
 
     // --- China C-RID Vendor Specific IE ---
-    // 计算打包消息长度: 头部3字节 + 5条报文 * 25字节 = 130
+    // 计算打包消息长度: 头部3字节 + 3条报文 * 25字节 = 78
     #define PACKED_MSG_HEADER_LEN 3
-    #define PACKED_MSG_COUNT      5
+    #define PACKED_MSG_COUNT      3
     #define PACKED_MSG_TOTAL_LEN (PACKED_MSG_HEADER_LEN + PACKED_MSG_COUNT * CRID_MESSAGE_SIZE)
 
     REQUIRE_SPACE(2 + 3 + 1 + 1 + PACKED_MSG_TOTAL_LEN);
@@ -374,7 +340,7 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     // Message Counter（每发送一条报文 +1，255 后回绕到 0）
     frame[pos++] = message_counter;
 
-    // --- 构建打包消息（5 条报文，不含认证报文，符合 GB42590 / IB-TM-2024-01） ---
+    // --- 构建打包消息（3 条报文，不含认证报文，符合 GB42590 / IB-TM-2024-01） ---
     REQUIRE_SPACE(PACKED_MSG_TOTAL_LEN);
     uint8_t packed_msg[PACKED_MSG_TOTAL_LEN];
     uint8_t packed_pos = 0;
@@ -383,7 +349,7 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     packed_msg[packed_pos++] = 0xF1;
     // 每条消息长度: 25
     packed_msg[packed_pos++] = CRID_MESSAGE_SIZE;
-    // 消息数量: 5
+    // 消息数量: 3
     packed_msg[packed_pos++] = PACKED_MSG_COUNT;
 
     // 1. Basic ID 报文
@@ -398,11 +364,6 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     memcpy(&packed_msg[packed_pos], location_msg, CRID_MESSAGE_SIZE);
     packed_pos += CRID_MESSAGE_SIZE;
 
-    // 3. Self-ID 报文
-    uint8_t self_desc_msg[CRID_MESSAGE_SIZE];
-    crid_build_self_desc_message(config, self_desc_msg);
-    memcpy(&packed_msg[packed_pos], self_desc_msg, CRID_MESSAGE_SIZE);
-    packed_pos += CRID_MESSAGE_SIZE;
 
     // 4. System 报文
     uint8_t system_msg[CRID_MESSAGE_SIZE];
@@ -410,11 +371,6 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     memcpy(&packed_msg[packed_pos], system_msg, CRID_MESSAGE_SIZE);
     packed_pos += CRID_MESSAGE_SIZE;
 
-    // 5. Operator ID 报文
-    uint8_t operator_id_msg[CRID_MESSAGE_SIZE];
-    crid_build_operator_id_message(config, operator_id_msg);
-    memcpy(&packed_msg[packed_pos], operator_id_msg, CRID_MESSAGE_SIZE);
-    packed_pos += CRID_MESSAGE_SIZE;
 
     // 复制打包消息到帧
     memcpy(&frame[pos], packed_msg, PACKED_MSG_TOTAL_LEN);

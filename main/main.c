@@ -17,7 +17,7 @@
 
 // 引入你项目的各组件头文件
 #include "crid_config.h"
-#include "crid_messages.h"
+#include "gb42590.h"
 #include "crid_wifi.h"
 #include "crid_patrol.h"
 #include "crid_web_ota.h"

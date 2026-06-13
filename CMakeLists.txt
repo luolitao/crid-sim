@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # Set the name of your project here
-project(crid_sim)
+project(esp32-crid-sim)
 
 # Optional: Suppress specific warnings if needed (not recommended for format issues, fix the source)
 # add_compile_options("-Wno-format")
