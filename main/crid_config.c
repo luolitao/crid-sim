@@ -117,8 +117,8 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->heading = 45.0f;
     config->status = STATUS_AIRBORNE;
 
-    config->operator_lat = 23.14f;
-    config->operator_lon = 113.26f;
+    config->operator_lat = 23.143017;
+    config->operator_lon = 113.260734;
     config->operator_alt = 10.0f;
 
     // 飞手名字: 前缀 "ESP32-CRID-OP-" + MAC 后 4 位

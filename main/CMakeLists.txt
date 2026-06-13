@@ -5,7 +5,7 @@ idf_component_register(
         crid_cli.c
         crid_ota.c
         crid_web_ota.c
-        crid_messages.c
+        gb42590.c
         crid_wifi.c
         crid_patrol.c
     INCLUDE_DIRS "."

@@ -64,12 +64,12 @@ static void crid_send_beacon_task(void *pvParameter) {
                         g_beacon_config.speed_vertical,
                         current_heading);
 
-        if ((s_tx_count % 10U) == 1U) {
+        if ((s_tx_count % 50U) == 1U) {
             ESP_LOGI(TAG, "[📡 TX POOL] Mode:%d | Lat: %.6f, Lon: %.6f | Heading: %.1f°", 
                      g_crid_config.flight_mode, current_lat, current_lon, current_heading);
         }
 
-        // 3. 实时重新构建 5 条国标消息组合成的完整 Beacon 原始数据帧
+        // 3. 实时重新构建 3-5 条国标消息组合成的完整 Beacon 原始数据帧
         uint8_t message_counter = g_beacon_config.message_counter;
         if (crid_build_beacon_frame(&g_beacon_config, message_counter,
                                     g_beacon_frame, BEACON_FRAME_BUF_SIZE, &g_beacon_frame_len)) {
