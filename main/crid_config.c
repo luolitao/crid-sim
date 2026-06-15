@@ -1,16 +1,84 @@
 #include "crid_config.h"
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/time.h>
 #include "esp_system.h"
 #include "esp_mac.h"
 #include "esp_log.h"
+#include "esp_chip_info.h"
+#include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "esp_sntp.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 
-
 static const char *TAG = "CN_C-RID_CFG";
+
 crid_dynamic_config_t g_crid_config;
 SemaphoreHandle_t g_crid_config_mutex = NULL;
+
+// ================= 系统与配置管理实现 =================
+
+void crid_get_sys_info(crid_sys_info_t *info) {
+    if (!info) return;
+    
+    // 【修复】直接使用编译期宏 CONFIG_IDF_TARGET 获取芯片型号
+    // 这样不仅不会报未定义枚举的错误，而且能精确显示 "esp32s0wd" 等具体型号
+    snprintf(info->chip_model, sizeof(info->chip_model), "%s", CONFIG_IDF_TARGET);
+    
+    // 使用 sdkconfig 中的宏获取 Flash 大小
+    snprintf(info->flash_size, sizeof(info->flash_size), "%s", CONFIG_ESPTOOLPY_FLASHSIZE);
+    
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(info->mac_addr, sizeof(info->mac_addr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+             
+    // 使用 esp_timer 获取微秒级运行时间并转换为秒
+    info->uptime_sec = (uint32_t)(esp_timer_get_time() / 1000000);
+    
+    // 获取 SNTP 同步的系统时间
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year < (2020 - 1900)) {
+        snprintf(info->sys_time, sizeof(info->sys_time), "Not Synced (Offline)");
+    } else {
+        strftime(info->sys_time, sizeof(info->sys_time), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    }
+    
+    info->free_heap = esp_get_free_heap_size();
+    
+    const esp_partition_t *part = esp_ota_get_running_partition();
+    snprintf(info->partition_name, sizeof(info->partition_name), "%.15s", part ? part->label : "Unknown");
+}
+
+void crid_get_config_snapshot(crid_dynamic_config_t *cfg) {
+    if (!cfg) return;
+    if (g_crid_config_mutex != NULL) {
+        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
+    }
+    *cfg = g_crid_config;
+    if (g_crid_config_mutex != NULL) {
+        xSemaphoreGive(g_crid_config_mutex);
+    }
+}
+
+static void time_sync_notification_cb(struct timeval *tv) {
+    ESP_LOGI(TAG, "SNTP Time synchronized!");
+}
+
+void crid_time_sync_init(void) {
+    ESP_LOGI(TAG, "Initializing SNTP");
+    esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+    esp_sntp_init();
+}
+
+// ================= 原有 NVS 与配置逻辑 =================
 
 esp_err_t crid_nvs_init(void) {
     esp_err_t ret = nvs_flash_init();
@@ -18,7 +86,6 @@ esp_err_t crid_nvs_init(void) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-
     if (ret == ESP_OK && g_crid_config_mutex == NULL) {
         g_crid_config_mutex = xSemaphoreCreateMutex();
         if (g_crid_config_mutex == NULL) {
@@ -26,7 +93,6 @@ esp_err_t crid_nvs_init(void) {
             return ESP_FAIL;
         }
     }
-
     return ret;
 }
 
@@ -34,7 +100,6 @@ esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
     esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
-        // 如果找不到存储，赋予默认值（默认广州越秀山，经典圆形）
         cfg->init_lat = 23.14287;
         cfg->init_lon = 113.26026;
         cfg->speed = 0.2f;
@@ -43,15 +108,11 @@ esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg) {
         ESP_LOGW(TAG, "NVS space empty. Loaded default factory config.");
         return ESP_OK;
     }
-
     size_t size = sizeof(crid_dynamic_config_t);
     err = nvs_get_blob(handle, "config_blob", cfg, &size);
     nvs_close(handle);
-    
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "Config successfully loaded from NVS.");
-    } else {
-        ESP_LOGE(TAG, "Failed to read blob from NVS: %s", esp_err_to_name(err));
     }
     return err;
 }
@@ -60,7 +121,6 @@ esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
     esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
-
     err = nvs_set_blob(handle, "config_blob", cfg, sizeof(crid_dynamic_config_t));
     if (err == ESP_OK) {
         err = nvs_commit(handle);
@@ -71,43 +131,21 @@ esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg) {
 }
 
 void crid_config_init_default(cn_crid_config_t *config) {
-    if (config == NULL) {
-        ESP_LOGE(TAG, "config is NULL");
-        return;
-    }
-
+    if (config == NULL) return;
     memset(config, 0, sizeof(cn_crid_config_t));
-
-    // --- 从硬件获取 MAC 地址 ---
-    //esp_err_t mac_ret = esp_efuse_mac_get_default(config->mac_address);
-    //if (mac_ret != ESP_OK) {
-    //    ESP_LOGE(TAG, "Failed to get MAC address, using fallback");
-    config->mac_address[0] = 0x24;
-    config->mac_address[1] = 0x0A;
-    config->mac_address[2] = 0xC4;
-    config->mac_address[3] = 0x12;
-    config->mac_address[4] = 0x34;
-    config->mac_address[5] = 0x56;
-
-    esp_err_t mac_ret = esp_base_mac_addr_set(config->mac_address);
-    if (mac_ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set base MAC: %s", esp_err_to_name(mac_ret));
-    }
-    //}
-
-    // 提取 MAC 地址最后 4 位（即后 2 字节）作为后缀
-    // 例如 MAC 24:0A:C4:12:34:56 -> 后缀 "3456"
+    
+    config->mac_address[0] = 0x24; config->mac_address[1] = 0x0A;
+    config->mac_address[2] = 0xC4; config->mac_address[3] = 0x12;
+    config->mac_address[4] = 0x34; config->mac_address[5] = 0x56;
+    esp_base_mac_addr_set(config->mac_address);
+    
     char mac_suffix[5];
-    snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X",
-             config->mac_address[4], config->mac_address[5]);
-
-    // --- UAS ID / 无人机唯一标识: 前缀 "ESP32CRID-" + MAC 后 4 位 ---
-    snprintf(config->uas_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32GB42750IBTM%s", mac_suffix);
-
-    config->id_type = ID_TYPE_SERIAL_NUMBER;
-    config->ua_type = UA_TYPE_HELICOPTER;
-
-    // 越秀山坐标
+    snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X", config->mac_address[4], config->mac_address[5]);
+    
+    snprintf(config->uas_id, sizeof(config->uas_id), "ESP32GB42750IBTM%s", mac_suffix);
+    config->id_type = 1; // ID_TYPE_SERIAL_NUMBER
+    config->ua_type = 1; // UA_TYPE_HELICOPTER
+    
     config->latitude = 23.14287f;
     config->longitude = 113.26026f;
     config->altitude_msl = 50.0f;
@@ -115,62 +153,41 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->speed_horizontal = 1.0f;
     config->speed_vertical = 0.0f;
     config->heading = 45.0f;
-    config->status = STATUS_AIRBORNE;
-
-    config->operator_lat = 23.143017;
-    config->operator_lon = 113.260734;
+    config->status = 1; // STATUS_AIRBORNE
+    
+    config->operator_lat = 23.143017f;
+    config->operator_lon = 113.260734f;
     config->operator_alt = 10.0f;
-
-    // 飞手名字: 前缀 "ESP32-CRID-OP-" + MAC 后 4 位
-    snprintf(config->operator_id, CRID_UAS_ID_MAX_LEN + 1, "ESP32-CRID-OP-%s", mac_suffix);
-
-    // 无人机名字/型号 (Self-ID 描述): 填写为 ESP32S3
-    strncpy(config->drone_name, "ESP32S3", CRID_UAS_ID_MAX_LEN);
-    config->drone_name[CRID_UAS_ID_MAX_LEN] = '\0';
-
-    config->operator_location_type = OP_LOC_TYPE_LIVE_GNSS; // Dynamic
-    config->classification_type = CLASSIFICATION_UNDECLARED;
+    
+    snprintf(config->operator_id, sizeof(config->operator_id), "ESP32-CRID-OP-%s", mac_suffix);
+    strncpy(config->drone_name, "ESP32S3", sizeof(config->drone_name) - 1);
+    
+    config->operator_location_type = 0; // OP_LOC_TYPE_LIVE_GNSS
+    config->classification_type = 0;
     config->category_eu = 0;
     config->class_eu = 0;
-    config->height_type = HEIGHT_REF_OVER_TAKEOFF;
-
-    // SSID 后缀也用 MAC 后 4 位
-    snprintf(config->ssid, CRID_SSID_MAX_LEN + 1, "ESP32-CRID-%s", mac_suffix);
-
+    config->height_type = 0; // HEIGHT_REF_OVER_TAKEOFF
+    
+    snprintf(config->ssid, sizeof(config->ssid), "ESP32-CRID-%s", mac_suffix);
     config->channel = DEFAULT_WIFI_CHANNEL;
-    config->message_counter = 0;
-
-    // 巡游参数
+    
     config->base_latitude = config->latitude;
     config->base_longitude = config->longitude;
     config->base_altitude_msl = config->altitude_msl;
-    config->patrol_radius_lat = 0.00005f;  // 约 5.5 米
-    config->patrol_radius_lon = 0.00004f;  // 约 4.4 米
+    config->patrol_radius_lat = 0.00005f;
+    config->patrol_radius_lon = 0.00004f;
     config->patrol_speed = 0.2f;
-    config->time_counter = 0.0f;
-
+    
     ESP_LOGI(TAG, "China C-RID configuration initialized");
-    ESP_LOGI(TAG, "  MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-             config->mac_address[0], config->mac_address[1], config->mac_address[2],
-             config->mac_address[3], config->mac_address[4], config->mac_address[5]);
-    ESP_LOGI(TAG, "  UAS ID: %s", config->uas_id);
-    ESP_LOGI(TAG, "  Drone Model (Self-ID): %s", config->drone_name);
-    ESP_LOGI(TAG, "  Operator ID: %s", config->operator_id);
-    ESP_LOGI(TAG, "  ID Type: %d (Serial Number)", config->id_type);
-    ESP_LOGI(TAG, "  UA Type: %d (Helicopter/Multirotor)", config->ua_type);
-    ESP_LOGI(TAG, "  Position: %.6f, %.6f", config->latitude, config->longitude);
 }
 
-void crid_config_update_position(cn_crid_config_t *config,
-                                  float lat, float lon,
-                                  float alt_msl, float alt_agl,
-                                  float speed_h, float speed_v,
-                                  float heading) {
+void crid_config_update_position(cn_crid_config_t *config, float lat, float lon,
+                                 float alt_msl, float alt_agl, float speed_h, 
+                                 float speed_v, float heading) {
     if (config == NULL) return;
-
     static uint32_t s_update_count = 0;
     s_update_count++;
-
+    
     config->latitude = lat;
     config->longitude = lon;
     config->altitude_msl = alt_msl;
@@ -178,10 +195,9 @@ void crid_config_update_position(cn_crid_config_t *config,
     config->speed_horizontal = speed_h;
     config->speed_vertical = speed_v;
     config->heading = heading;
-
+    
     if ((s_update_count % 10U) == 1U) {
         ESP_LOGI(TAG, "Position updated: %.6f, %.6f, Alt: %.2fm, Hdg: %.1f",
-                 config->latitude, config->longitude,
-                 config->altitude_msl, config->heading);
+                 config->latitude, config->longitude, config->altitude_msl, config->heading);
     }
 }

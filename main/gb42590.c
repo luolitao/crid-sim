@@ -92,7 +92,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     }
     message[2] = track_angle;
     message[3] = encode_ground_speed(config->speed_horizontal);
-    message[4] = (uint8_t)(config->speed_vertical * 2.0f + 63.0f + 0.5f);
+    message[4] = (uint8_t)(config->speed_vertical * 2.0f );
     
     // 【修复】使用 round() 避免浮点截断误差
     write_le32_u32(&message[5], (uint32_t)(int32_t)round(config->latitude * 1e7));
@@ -141,32 +141,6 @@ void crid_build_system_message(const cn_crid_config_t *config, uint8_t *message)
     write_le32_u32(&message[20], ts_since_2019);
     
     ESP_LOGD(TAG, "System message built");
-}
-
-void crid_build_self_desc_message(const cn_crid_config_t *config, uint8_t *message) {
-    memset(message, 0, CRID_MESSAGE_SIZE);
-    message[0] = 0x01 | (MSG_TYPE_SELF_DESC << 4);
-    message[1] = DESC_TYPE_TEXT;
-    
-    memset(&message[2], 0x00, 23);
-    size_t id_len = strlen(config->drone_name);
-    if (id_len > 23) id_len = 23;
-    memcpy(&message[2], config->drone_name, id_len);
-    
-    ESP_LOGD(TAG, "Self-Description message built (Drone: %s)", config->drone_name);
-}
-
-void crid_build_operator_id_message(const cn_crid_config_t *config, uint8_t *message) {
-    memset(message, 0, CRID_MESSAGE_SIZE);
-    message[0] = 0x01 | (MSG_TYPE_OPERATOR_ID << 4);
-    message[1] = 0x00;
-    
-    memset(&message[2], 0x00, 20);
-    size_t id_len = strlen(config->operator_id);
-    if (id_len > 20) id_len = 20;
-    memcpy(&message[2], config->operator_id, id_len);
-    
-    ESP_LOGD(TAG, "Operator ID message built (%s)", config->operator_id);
 }
 
 bool crid_build_beacon_frame(const cn_crid_config_t *config,

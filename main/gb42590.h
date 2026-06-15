@@ -9,6 +9,30 @@
 extern "C" {
 #endif
 
+// --- 报文常量 ---
+#define CRID_MESSAGE_SIZE      25     // 每条报文 25 字节
+#define CRID_UAS_ID_MAX_LEN    20     // UAS ID 最大长度
+
+// --- 中国 C-RID 标准 OUI 和类型 ---
+#define CRID_OUI_0 0xFA
+#define CRID_OUI_1 0x0B
+#define CRID_OUI_2 0xBC
+#define CRID_VENDOR_TYPE 0x0D
+
+// --- 报文类型 (符合 ASTM F3411 / ASD-STAN 4709-002) ---
+#define MSG_TYPE_BASIC_ID    0x0  // 基本 ID 报文
+#define MSG_TYPE_LOCATION    0x1  // 位置向量报文
+#define MSG_TYPE_AUTH        0x2  // 认证报文
+#define MSG_TYPE_SELF_DESC   0x3  // 运行描述报文
+#define MSG_TYPE_SYSTEM      0x4  // 系统报文
+#define MSG_TYPE_OPERATOR_ID 0x5  // 操作员 ID 报文
+#define MSG_TYPE_PACKED      0xF  // 报文打包
+
+// --- 描述类型 ---
+#define DESC_TYPE_TEXT            0
+#define DESC_TYPE_EMERGENCY       1
+#define DESC_TYPE_EXTENDED_STATUS 2
+
 /**
  * @brief 构建 Basic ID 报文 (25 字节，符合试行标准表3)
  * @param config 配置结构体指针

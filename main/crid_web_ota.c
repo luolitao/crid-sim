@@ -1,34 +1,20 @@
 #include "sdkconfig.h"
 #include "crid_web_ota.h"
-#include "crid_ota.h"
 #include "crid_config.h"
+#include "crid_ota.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
-#include <sys/time.h>
 
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "esp_system.h"
-#include "esp_chip_info.h"
-#include "esp_mac.h"
-#include "esp_ota_ops.h"
-#include "esp_timer.h"
-#include "esp_sntp.h"
-#include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
-// ================= 版本管理 =================
-// 使用 C 语言标准宏，每次编译时自动更新为当前日期和时间
-#define APP_VERSION "v0.1 (" __DATE__ " " __TIME__ ")"
 
 static const char *TAG = "CRID_WEB_OTA";
 static httpd_handle_t s_server = NULL;
 static volatile bool s_ota_in_progress = false;
 
-// ================= 辅助函数 =================
 static void reboot_delay_task(void *arg) {
     vTaskDelay(pdMS_TO_TICKS(1500));
     esp_restart();
@@ -38,81 +24,24 @@ static void reboot_delay_task(void *arg) {
 
 // ================= 确认 OTA 接口 (GET /confirm_ota) =================
 static esp_err_t confirm_ota_handler(httpd_req_t *req) {
-    nvs_handle_t nvs;
-    uint8_t pending = 0;
-    
-    if (nvs_open("cridd", NVS_READWRITE, &nvs) == ESP_OK) {
-        nvs_get_u8(nvs, "ota_pending", &pending);
-        if (pending == 1) {
-            esp_err_t ret = esp_ota_mark_app_valid_cancel_rollback();
-            if (ret == ESP_OK) {
-                nvs_set_u8(nvs, "ota_pending", 0);
-                nvs_commit(nvs);
-                ESP_LOGI(TAG, "OTA confirmed valid. Rollback cancelled.");
-                httpd_resp_set_type(req, "text/plain");
-                return httpd_resp_sendstr(req, "OK: Firmware confirmed valid.");
-            } else {
-                ESP_LOGE(TAG, "Failed to mark app valid: %s", esp_err_to_name(ret));
-            }
-        }
-        nvs_close(nvs);
+    if (crid_ota_confirm() == ESP_OK) {
+        httpd_resp_set_type(req, "text/plain");
+        return httpd_resp_sendstr(req, "OK: Firmware confirmed valid.");
     }
-    
     httpd_resp_set_status(req, "400 Bad Request");
     return httpd_resp_sendstr(req, "No pending OTA to confirm.");
 }
 
 // ================= Web 主页处理 (GET /) =================
 static esp_err_t root_get_handler(httpd_req_t *req) {
-    // 1. 检查 OTA 待确认状态
-    uint8_t ota_pending = 0;
-    nvs_handle_t nvs;
-    if (nvs_open("cridd", NVS_READONLY, &nvs) == ESP_OK) {
-        nvs_get_u8(nvs, "ota_pending", &ota_pending);
-        nvs_close(nvs);
-    }
+    // 1. 调用底层 API 获取系统与配置信息 (完全解耦)
+    crid_sys_info_t sys_info;
+    crid_get_sys_info(&sys_info);
+    
+    crid_dynamic_config_t cfg;
+    crid_get_config_snapshot(&cfg);
 
-    // 2. 获取基础硬件信息
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    const esp_partition_t *running_part = esp_ota_get_running_partition();
-    const char *part_name = running_part ? running_part->label : "Unknown";
-
-    // 3. 计算运行时间 (Uptime)
-    int64_t uptime_us = esp_timer_get_time();
-    uint32_t uptime_s = uptime_us / 1000000;
-    int days = uptime_s / 86400;
-    int hours = (uptime_s % 86400) / 3600;
-    int mins = (uptime_s % 3600) / 60;
-    int secs = uptime_s % 60;
-
-    // 4. 获取 SNTP 同步时间
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    char time_str[32];
-    if (timeinfo.tm_year < (2020 - 1900)) {
-        snprintf(time_str, sizeof(time_str), "Not Synchronized (Offline)");
-    } else {
-        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    }
-
-    // 5. 获取当前无人机配置
-    double cur_lat = 0, cur_lon = 0;
-    int cur_mode = 0;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
-    }
-    cur_lat = g_crid_config.init_lat;
-    cur_lon = g_crid_config.init_lon;
-    cur_mode = g_crid_config.flight_mode;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreGive(g_crid_config_mutex);
-    }
-
+     
     // --- 开始发送 HTML (Chunked 方式，零堆内存分配) ---
     SEND_CHUNK("<!doctype html><html><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -130,53 +59,32 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
         ".status{margin-top:10px;font-weight:bold;font-size:14px}</style></head><body>"
         "<h1>C-RID Simulator Control</h1>");
 
-    // 【新增】：如果处于待确认状态，显示醒目的警告条
-    if (ota_pending == 1) {
-        SEND_CHUNK("<div class=\"warning\">"
-            "<strong>⚠️ 新固件运行中 (待确认)</strong><br>"
-            "设备已成功升级，但尚未标记为永久有效。若新固件存在严重问题导致设备重启，系统将自动回退。<br>"
-            "若当前运行正常，请在 60 秒内点击确认："
-            "<button onclick=\"confirmOta()\">✅ 确认固件正常</button>"
-            "<p id=\"confirmStatus\" style=\"margin-top:8px;font-size:13px\"></p>"
-            "</div>"
-            "<script>"
-            "function confirmOta() {"
-            "  const st = document.getElementById('confirmStatus');"
-            "  st.innerText = 'Confirming...';"
-            "  fetch('/confirm_ota').then(res => res.text()).then(txt => {"
-            "    st.innerText = txt;"
-            "    st.style.color = txt.startsWith('OK') ? 'green' : 'red';"
-            "    if(txt.startsWith('OK')) setTimeout(() => location.reload(), 1500);"
-            "  });"
-            "}"
-            "</script>");
-    }
-
     // 系统信息区块
     SEND_CHUNK("<div class=\"box\"><h3>System Information</h3><table>");
     char buf[128]; 
     
-    // 【新增】显示软件版本号 (包含编译时间)
-    snprintf(buf, sizeof(buf), "<tr><th>App Version</th><td>%s</td></tr>", APP_VERSION);
-    SEND_CHUNK(buf);
+    int days = sys_info.uptime_sec / 86400;
+    int hours = (sys_info.uptime_sec % 86400) / 3600;
+    int mins = (sys_info.uptime_sec % 3600) / 60;
+    int secs = sys_info.uptime_sec % 60;
 
-    snprintf(buf, sizeof(buf), "<tr><th>Chip / Flash</th><td>%s / %sMB</td></tr>", CONFIG_IDF_TARGET, CONFIG_ESPTOOLPY_FLASHSIZE);
+    snprintf(buf, sizeof(buf), "<tr><th>Chip / Flash</th><td>%s / %sMB</td></tr>", sys_info.chip_model, sys_info.flash_size);
     SEND_CHUNK(buf);
     
-    snprintf(buf, sizeof(buf), "<tr><th>MAC Address</th><td>%02X:%02X:%02X:%02X:%02X:%02X</td></tr>", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    snprintf(buf, sizeof(buf), "<tr><th>MAC Address</th><td>%s</td></tr>", sys_info.mac_addr);
     SEND_CHUNK(buf);
 
     snprintf(buf, sizeof(buf), "<tr><th>Uptime</th><td>%dd %dh %dm %ds</td></tr>", days, hours, mins, secs);
     SEND_CHUNK(buf);
 
     SEND_CHUNK("<tr><th>System Time</th><td>");
-    SEND_CHUNK(time_str);
+    SEND_CHUNK(sys_info.sys_time);
     SEND_CHUNK("</td></tr>");
 
-    snprintf(buf, sizeof(buf), "<tr><th>Free Heap</th><td>%d bytes</td></tr>", (int)esp_get_free_heap_size());
+    snprintf(buf, sizeof(buf), "<tr><th>Free Heap</th><td>%lu bytes</td></tr>", sys_info.free_heap);
     SEND_CHUNK(buf);
 
-    snprintf(buf, sizeof(buf), "<tr><th>Partition</th><td>%s</td></tr>", part_name);
+    snprintf(buf, sizeof(buf), "<tr><th>Partition</th><td>%s</td></tr>", sys_info.partition_name);
     SEND_CHUNK(buf);
     SEND_CHUNK("</table></div>");
 
@@ -195,15 +103,16 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
         "</form>"
         "<p id=\"cfgStatus\" class=\"status\"></p></div>");
 
+    // JS: 初始化表单数据
     SEND_CHUNK("<script>"
         "document.getElementById('lat').value = '");
-    snprintf(buf, sizeof(buf), "%.6f", cur_lat);
+    snprintf(buf, sizeof(buf), "%.6f", cfg.init_lat);
     SEND_CHUNK(buf);
     SEND_CHUNK("'; document.getElementById('lon').value = '");
-    snprintf(buf, sizeof(buf), "%.6f", cur_lon);
+    snprintf(buf, sizeof(buf), "%.6f", cfg.init_lon);
     SEND_CHUNK(buf);
     SEND_CHUNK("'; document.getElementById('mode').value = '");
-    snprintf(buf, sizeof(buf), "%d", cur_mode);
+    snprintf(buf, sizeof(buf), "%d", cfg.flight_mode);
     SEND_CHUNK(buf);
     SEND_CHUNK("';"
         "document.getElementById('configForm').addEventListener('submit', async function(e) {"
@@ -254,7 +163,6 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
         "});"
         "</script></body></html>");
 
-    // 【关键】发送 NULL chunk 结束响应
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
@@ -273,7 +181,7 @@ static esp_err_t config_post_handler(httpd_req_t *req) {
     int mode = 0;
     if (sscanf(buf, "%lf,%lf,%d", &lat, &lon, &mode) != 3) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Invalid format. Use: lat,lon,mode");
+        return httpd_resp_sendstr(req, "Invalid format");
     }
 
     if (mode < 0 || mode >= FLIGHT_MODE_MAX) {
@@ -281,16 +189,13 @@ static esp_err_t config_post_handler(httpd_req_t *req) {
         return httpd_resp_sendstr(req, "Invalid mode");
     }
 
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
-    }
+    // 调用底层 API 保存配置
+    if (g_crid_config_mutex != NULL) xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
     g_crid_config.init_lat = lat;
     g_crid_config.init_lon = lon;
     g_crid_config.flight_mode = (uint8_t)mode;
     crid_dynamic_config_t snapshot = g_crid_config;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreGive(g_crid_config_mutex);
-    }
+    if (g_crid_config_mutex != NULL) xSemaphoreGive(g_crid_config_mutex);
 
     crid_nvs_save_config(&snapshot);
     
@@ -332,7 +237,7 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
         crid_ota_end(ota_handle);
         s_ota_in_progress = false;
         httpd_resp_set_status(req, "500 Internal Server Error");
-        return httpd_resp_sendstr(req, "HTTP receive error (client disconnected?)");
+        return httpd_resp_sendstr(req, "HTTP receive error");
     }
 
     ret = crid_ota_end(ota_handle);
@@ -354,10 +259,12 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
 void crid_web_ota_init(void) {
     if (s_server != NULL) return;
     
+    crid_time_sync_init(); // 调用底层 API 初始化时间同步
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 4096; // S0WD 优化：限制栈大小防止 OOM
+    config.stack_size = 4096;
     config.server_port = 80;
-    config.max_uri_handlers = 5; // 增加一个 handler
+    config.max_uri_handlers = 5;
     config.recv_wait_timeout = 30;
     config.send_wait_timeout = 30;
 
@@ -366,15 +273,15 @@ void crid_web_ota_init(void) {
         return;
     }
 
-    httpd_uri_t root_uri      = { .uri = "/", .method = HTTP_GET, .handler = root_get_handler };
-    httpd_uri_t confirm_uri   = { .uri = "/confirm_ota", .method = HTTP_GET, .handler = confirm_ota_handler };
-    httpd_uri_t config_uri    = { .uri = "/config", .method = HTTP_POST, .handler = config_post_handler };
-    httpd_uri_t ota_uri       = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post_handler };
+    httpd_uri_t root_uri    = { .uri = "/", .method = HTTP_GET, .handler = root_get_handler };
+    httpd_uri_t confirm_uri = { .uri = "/confirm_ota", .method = HTTP_GET, .handler = confirm_ota_handler };
+    httpd_uri_t config_uri  = { .uri = "/config", .method = HTTP_POST, .handler = config_post_handler };
+    httpd_uri_t ota_uri     = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post_handler };
 
     httpd_register_uri_handler(s_server, &root_uri);
     httpd_register_uri_handler(s_server, &confirm_uri);
     httpd_register_uri_handler(s_server, &config_uri);
     httpd_register_uri_handler(s_server, &ota_uri);
     
-    ESP_LOGI(TAG, "Web server started (Version: %s). Open http://192.168.4.1/", APP_VERSION);
+    ESP_LOGI(TAG, "Web server started. Open http://192.168.4.1/ in your browser");
 }
