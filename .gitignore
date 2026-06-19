@@ -1,1 +1,8 @@
-Nothing should be ignored based on the provided file changes, as they are all source code files (.c files) without any build artifacts, dependencies, or temporary files.
+build/
+sdkconfig
+sdkconfig.old
+.DS_Store
+.devcontainer/
+.codebuddy/
+.vscode/
+.clangd
