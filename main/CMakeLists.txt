@@ -1,12 +1,11 @@
 idf_component_register(
     SRCS
         main.c
-        crid_config.c
-        crid_cli.c
-        crid_ota.c
-        crid_web_ota.c
-        gb42590.c
-        crid_wifi.c
+        rid_config.c
+        rid_ota.c
+        rid_web_ota.c
+        encode_gb42590.c
+        rid_wifi.c
         crid_patrol.c
     INCLUDE_DIRS "."
     REQUIRES

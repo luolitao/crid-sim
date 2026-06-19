@@ -251,7 +251,7 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     static uint32_t s_frame_build_count = 0;
     s_frame_build_count++;
     
-    // 每 10 次打印一次，避免串口日志刷屏
+    // 每 100 次打印一次，避免串口日志刷屏
     if ((s_frame_build_count % 100U) == 1U) {
         ESP_LOGI(TAG, "=== Beacon Frame Built: %u bytes, Counter=%u ===", *out_len, message_counter);
         
