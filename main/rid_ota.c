@@ -1,4 +1,4 @@
-#include "crid_ota.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include "sdkconfig.h"
@@ -9,7 +9,9 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 
-static const char *TAG = "CRID_OTA";
+#include "rid_ota.h"
+
+static const char *TAG = "RID_OTA";
 
 // ================= 流式 OTA 核心实现 =================
 typedef struct {

@@ -1,7 +1,7 @@
 #include "crid_patrol.h"
 #include <math.h>
 #include "esp_log.h"
-#include "crid_config.h"
+#include "rid_config.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

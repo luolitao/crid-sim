@@ -16,13 +16,13 @@
 #include "esp_log.h"
 
 // 引入你项目的各组件头文件
-#include "crid_config.h"
-#include "gb42590.h"
-#include "crid_wifi.h"
+#include "rid_config.h"
+#include "encode_gb42590.h"
+#include "rid_wifi.h"
 #include "crid_patrol.h"
-#include "crid_web_ota.h"
+#include "rid_web_ota.h"
 
-static const char *TAG = "CRID_MAIN";
+static const char *TAG = "RID_MAIN";
 
 // --- 全局 Beacon 帧缓冲区（仅在发送任务中使用） ---
 #define BEACON_FRAME_BUF_SIZE 512

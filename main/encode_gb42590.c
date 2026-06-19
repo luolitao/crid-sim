@@ -1,5 +1,3 @@
-#include "sdkconfig.h"
-#include "gb42590.h"
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -9,7 +7,10 @@
 #include "freertos/task.h"
 #include "sys/time.h"
 
-static const char *TAG = "GB42590_IBTM202401_MSG";
+#include "sdkconfig.h"
+#include "encode_gb42590.h"
+
+static const char *TAG = "ENCODE_GB42590";
 
 // --- 辅助函数：写入 int32_t 为小端序 (安全处理负数，避免有符号右移未定义行为) ---
 static inline void write_le32(uint8_t *buf, int32_t val) {

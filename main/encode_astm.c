@@ -1,5 +1,5 @@
 #include "sdkconfig.h"
-#include "crid_messages.h"
+#include "encode_astm.h"
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "sys/time.h"
 
-static const char *TAG = "CN_C-RID_MSG";
+static const char *TAG = "ENCODE_ASTM";
 
 // --- 辅助函数：写入 int32_t 为小端序 ---
 static inline void write_le32(uint8_t *buf, int32_t val) {

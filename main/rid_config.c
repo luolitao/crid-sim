@@ -1,4 +1,4 @@
-#include "crid_config.h"
+#include "rid_config.h"
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -13,7 +13,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-static const char *TAG = "CN_C-RID_CFG";
+static const char *TAG = "RID_CFG";
 
 crid_dynamic_config_t g_crid_config;
 SemaphoreHandle_t g_crid_config_mutex = NULL;

@@ -4,8 +4,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "crid_config.h"
-#include "crid_ota.h"
+#include "rid_config.h"
+#include "rid_ota.h"
 
 static const char *TAG = "CRID_CLI";
 #define BUF_SIZE (256)

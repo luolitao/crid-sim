@@ -1,7 +1,4 @@
 #include "sdkconfig.h"
-#include "crid_web_ota.h"
-#include "crid_config.h"
-#include "crid_ota.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,7 +8,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "CRID_WEB_OTA";
+#include "rid_web_ota.h"
+#include "rid_config.h"
+#include "rid_ota.h"
+
+static const char *TAG = "RID_WEB_OTA";
 static httpd_handle_t s_server = NULL;
 static volatile bool s_ota_in_progress = false;
 

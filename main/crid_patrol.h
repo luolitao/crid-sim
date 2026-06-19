@@ -1,7 +1,7 @@
 #ifndef CRID_PATROL_H
 #define CRID_PATROL_H
 
-#include "crid_config.h"
+#include "rid_config.h"
 
 #ifdef __cplusplus
 extern "C" {

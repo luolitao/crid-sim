@@ -1,7 +1,7 @@
 #ifndef CRID_MESSAGES_H
 #define CRID_MESSAGES_H
 
-#include "crid_config.h"
+#include "rid_config.h"
 #include <stdint.h>
 #include <stdbool.h>
 

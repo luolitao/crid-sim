@@ -1,4 +1,3 @@
-#include "crid_wifi.h"
 #include "sdkconfig.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -8,7 +7,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "CN_C-RID_WIFI";
+#include "rid_wifi.h"
+
+static const char *TAG = "RID_WIFI";
 
 // 【新增】定义 AP 的接入密码 (WPA2 要求密码长度必须在 8~63 个字符之间)
 #define AP_DEFAULT_PASSWORD "12345678"

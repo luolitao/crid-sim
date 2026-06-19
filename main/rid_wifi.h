@@ -1,7 +1,7 @@
 #ifndef CRID_WIFI_H
 #define CRID_WIFI_H
 
-#include "crid_config.h"
+#include "rid_config.h"
 #include "esp_err.h"
 #include <stdint.h>
 
