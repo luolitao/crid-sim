@@ -1,8 +1,35 @@
-build/
-sdkconfig
-sdkconfig.old
-.DS_Store
-.devcontainer/
-.codebuddy/
+```
+# Compiled and build artifacts
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.a
+*.class
+*.pyc
+__pycache__/
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Editors
 .vscode/
-.clangd
+.idea/
+
+# Build directories
+dist/
+build/
+target/
+```

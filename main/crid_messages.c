@@ -10,36 +10,38 @@
 
 static const char *TAG = "CN_C-RID_MSG";
 
-// --- 辅助函数：写入 int32_t 为小端序 ---
+// --- 辅助函数：写入 int32_t 为小端序 (强制内联) ---
 static inline void write_le32(uint8_t *buf, int32_t val) {
-    for (int i = 0; i < 4; i++) {
-        buf[i] = (val >> (i * 8)) & 0xFF;
-    }
+    buf[0] = val & 0xFF;
+    buf[1] = (val >> 8) & 0xFF;
+    buf[2] = (val >> 16) & 0xFF;
+    buf[3] = (val >> 24) & 0xFF;
 }
 
-// --- 辅助函数：写入 uint16_t 为小端序 ---
+// --- 辅助函数：写入 uint16_t 为小端序 (强制内联) ---
 static inline void write_le16(uint8_t *buf, uint16_t val) {
     buf[0] = val & 0xFF;
     buf[1] = (val >> 8) & 0xFF;
 }
 
-// --- 辅助函数：写入 uint32_t 为小端序 ---
+// --- 辅助函数：写入 uint32_t 为小端序 (强制内联) ---
 static inline void write_le32_u32(uint8_t *buf, uint32_t val) {
-    for (int i = 0; i < 4; i++) {
-        buf[i] = (val >> (i * 8)) & 0xFF;
-    }
+    buf[0] = val & 0xFF;
+    buf[1] = (val >> 8) & 0xFF;
+    buf[2] = (val >> 16) & 0xFF;
+    buf[3] = (val >> 24) & 0xFF;
 }
 
 // --- 编码地速 (符合 ASTM F3411-22a 表) ---
 // 速度 < 63.75 m/s: encoded = speed / 0.25
 // 速度 >= 63.75 m/s 且 <= 254.25 m/s: encoded = 255 + (speed - 63.75) / 0.75
 // 速度 > 254.25 m/s: encoded = 254 (max)
-static uint8_t encode_ground_speed(float speed_ms) {
+static inline uint8_t encode_ground_speed(float speed_ms) {
     if (speed_ms < 0.0f) speed_ms = 0.0f;
     if (speed_ms < 63.75f) {
-        return (uint8_t)(speed_ms / 0.25f);
+        return (uint8_t)(speed_ms * 4.0f);
     } else if (speed_ms <= 254.25f) {
-        return (uint8_t)(255 + (speed_ms - 63.75f) / 0.75f);
+        return (uint8_t)(255 + (speed_ms - 63.75f) * 1.333333f);
     } else {
         return 254;
     }
@@ -49,12 +51,27 @@ static uint8_t encode_ground_speed(float speed_ms) {
 // 符合 ASTM F3411: encoded = (altitude_m + 1000) / 0.5
 // 有效范围: -1000m ~ 31767.5m
 // 特殊值: 0 = Invalid/Unknown (-1000m)
-static uint16_t encode_altitude(float altitude_m) {
+static inline uint16_t encode_altitude(float altitude_m) {
     if (altitude_m < -1000.0f) altitude_m = -1000.0f;
-    int32_t val = (int32_t)((altitude_m + 1000.0f) / 0.5f);
+    int32_t val = (int32_t)((altitude_m + 1000.0f) * 2.0f);
     if (val < 0) val = 0;
     if (val > 65535) val = 65535;
     return (uint16_t)val;
+}
+
+// --- 获取当前 UTC 时间戳 (自当前小时起的 0.1 秒单位) ---
+static inline uint16_t get_timestamp_0_1s(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    struct tm *tm_utc = gmtime(&tv.tv_sec);
+    return (uint16_t)(tm_utc->tm_min * 600 + tm_utc->tm_sec * 10 + tv.tv_usec / 100000);
+}
+
+// --- 获取自 2019-01-01 以来的秒数 ---
+static inline uint32_t get_timestamp_since_2019(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint32_t)(tv.tv_sec - 1546300800);
 }
 
 void crid_build_basic_id_message(const cn_crid_config_t *config, uint8_t *message) {
@@ -144,11 +161,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     // 字节21-22: 时间戳 (自当前小时起的 0.1 秒单位，小端序)
     // 范围: 0 ~ 35999 (表示 0.0s ~ 3599.9s)
     // 无效值: 0xFFFF
-    struct timeval tv_loc;
-    gettimeofday(&tv_loc, NULL);
-    struct tm *tm_utc = gmtime(&tv_loc.tv_sec);
-    uint16_t ts = (uint16_t)(tm_utc->tm_min * 600 + tm_utc->tm_sec * 10 + tv_loc.tv_usec / 100000);
-    write_le16(&message[21], ts);
+    write_le16(&message[21], get_timestamp_0_1s());
 
     // 字节23: [Reserved2(4)][TSAccuracy(4)]
     message[23] = (0x00 << 4) | 0x02; // TSAccuracy = 0.2s
@@ -192,9 +205,7 @@ void crid_build_system_message(const cn_crid_config_t *config, uint8_t *message)
     write_le16(&message[18], encode_altitude(config->operator_alt));
 
     // 字节20-23: 时间戳 (自 2019-01-01 00:00:00 UTC 的秒数，小端序)
-    struct timeval tv_sys;
-    gettimeofday(&tv_sys, NULL);
-    uint32_t ts_since_2019 = (uint32_t)(tv_sys.tv_sec - 1546300800);
+    write_le32_u32(&message[20], get_timestamp_since_2019());
     write_le32_u32(&message[20], ts_since_2019);
 
     // 字节24: 预留
@@ -239,10 +250,7 @@ void crid_build_auth_message(const cn_crid_config_t *config, uint8_t *message) {
     message[3] = 0;
 
     // 字节4-7: Timestamp (relative to 2019-01-01)
-    struct timeval tv_auth;
-    gettimeofday(&tv_auth, NULL);
-    uint32_t ts_since_2019 = (uint32_t)(tv_auth.tv_sec - 1546300800);
-    write_le32_u32(&message[4], ts_since_2019);
+    write_le32_u32(&message[4], get_timestamp_since_2019());
 
     // 字节8-24: AuthData (17 bytes for page 0)
     // 全部置零表示无认证数据
@@ -364,51 +372,37 @@ bool crid_build_beacon_frame(cn_crid_config_t *config,
     // 递增 message_counter，uint8_t 自动 0-255 循环回绕
     config->message_counter++;
 
-    // --- 构建打包消息（5 条报文，不含认证报文，符合 GB42590 / IB-TM-2024-01） ---
-    uint8_t packed_msg[PACKED_MSG_TOTAL_LEN];
+
+    // --- 直接写入打包消息到帧中，避免额外缓冲区 ---
+    uint8_t *packed_base = &frame[pos];
     uint8_t packed_pos = 0;
 
     // 打包格式标识
-    packed_msg[packed_pos++] = 0xF1;
-    // 每条消息长度: 25
-    packed_msg[packed_pos++] = CRID_MESSAGE_SIZE;
-    // 消息数量: 5
-    packed_msg[packed_pos++] = PACKED_MSG_COUNT;
+    packed_base[packed_pos++] = 0xF1;
+    packed_base[packed_pos++] = CRID_MESSAGE_SIZE;
+    packed_base[packed_pos++] = PACKED_MSG_COUNT;
 
     // 1. Basic ID 报文
-    uint8_t basic_msg[CRID_MESSAGE_SIZE];
-    crid_build_basic_id_message(config, basic_msg);
-    memcpy(&packed_msg[packed_pos], basic_msg, CRID_MESSAGE_SIZE);
+    crid_build_basic_id_message(config, &packed_base[packed_pos]);
     packed_pos += CRID_MESSAGE_SIZE;
 
     // 2. Location 报文
-    uint8_t location_msg[CRID_MESSAGE_SIZE];
-    crid_build_location_message(config, location_msg);
-    memcpy(&packed_msg[packed_pos], location_msg, CRID_MESSAGE_SIZE);
+    crid_build_location_message(config, &packed_base[packed_pos]);
     packed_pos += CRID_MESSAGE_SIZE;
 
     // 3. Self-ID 报文
-    uint8_t self_desc_msg[CRID_MESSAGE_SIZE];
-    crid_build_self_desc_message(config, self_desc_msg);
-    memcpy(&packed_msg[packed_pos], self_desc_msg, CRID_MESSAGE_SIZE);
+    crid_build_self_desc_message(config, &packed_base[packed_pos]);
     packed_pos += CRID_MESSAGE_SIZE;
 
     // 4. System 报文
-    uint8_t system_msg[CRID_MESSAGE_SIZE];
-    crid_build_system_message(config, system_msg);
-    memcpy(&packed_msg[packed_pos], system_msg, CRID_MESSAGE_SIZE);
+    crid_build_system_message(config, &packed_base[packed_pos]);
     packed_pos += CRID_MESSAGE_SIZE;
 
     // 5. Operator ID 报文
-    uint8_t operator_id_msg[CRID_MESSAGE_SIZE];
-    crid_build_operator_id_message(config, operator_id_msg);
-    memcpy(&packed_msg[packed_pos], operator_id_msg, CRID_MESSAGE_SIZE);
+    crid_build_operator_id_message(config, &packed_base[packed_pos]);
     packed_pos += CRID_MESSAGE_SIZE;
 
-    // 复制打包消息到帧
-    memcpy(&frame[pos], packed_msg, PACKED_MSG_TOTAL_LEN);
     pos += PACKED_MSG_TOTAL_LEN;
-
     *out_len = pos;
 
     ESP_LOGI(TAG, "Beacon frame built: %u bytes, counter=%u, pos=(%.6f,%.6f)",
