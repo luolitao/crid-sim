@@ -102,8 +102,8 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     write_le16(&message[15], encode_altitude(config->altitude_msl)); // 几何高度通常与气压高度相近或相同
     write_le16(&message[17], encode_altitude(config->altitude_agl));
     
-    message[19] = (0x04 << 4) | 0x0B;
-    message[20] = (0x00 << 4) | 0x04;
+    message[19] = (0x04 << 4) | 0x0B; // VertAccuracy=4 (<10m), HorizAccuracy=11 (<3m)
+    message[20] = 0x04; // SpeedAccuracy=4 (<0.3m/s), BaroAccuracy=0 (Unknown)
     
     struct timeval tv_loc;
     gettimeofday(&tv_loc, NULL);
@@ -111,7 +111,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     uint16_t ts = (uint16_t)(tm_utc->tm_min * 600 + tm_utc->tm_sec * 10 + tv_loc.tv_usec / 100000);
     write_le16(&message[21], ts);
     
-    message[23] = (0x00 << 4) | 0x02;
+    message[23] = 0x02; // TSAccuracy = 0.2s
     
     ESP_LOGD(TAG, "Location message built (%.6f, %.6f)", config->latitude, config->longitude);
 }
@@ -236,6 +236,10 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     crid_build_system_message(config, system_msg);
     memcpy(&packed_msg[packed_pos], system_msg, CRID_MESSAGE_SIZE);
     packed_pos += CRID_MESSAGE_SIZE;
+
+    // Note: packed_pos is intentionally not used after this point.
+    // The variable tracks the position during message construction above.
+    (void)packed_pos; // Suppress unused variable warning if needed
     
     memcpy(&frame[pos], packed_msg, PACKED_MSG_TOTAL_LEN);
     pos += PACKED_MSG_TOTAL_LEN;
