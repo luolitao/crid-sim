@@ -140,7 +140,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     // 字节20: [BaroAccuracy(4)][SpeedAccuracy(4)]
     // SpeedAccuracy: 2 = < 3m/s, 4 = < 0.3m/s
     // BaroAccuracy: 0 = Unknown, 4 = < 10m
-    message[20] = (0x00 << 4) | 0x04; // Baro = Unknown, Speed <= 0.3m/s
+    message[20] = (0x00 << 4) | 0x04; // Speed <= 0.3m/s (redundant OR kept for clarity)
 
     // 字节21-22: 时间戳 (自当前小时起的 0.1 秒单位，小端序)
     // 范围: 0 ~ 35999 (表示 0.0s ~ 3599.9s)
@@ -152,7 +152,7 @@ void crid_build_location_message(const cn_crid_config_t *config, uint8_t *messag
     write_le16(&message[21], ts);
 
     // 字节23: [Reserved2(4)][TSAccuracy(4)]
-    message[23] = (0x00 << 4) | 0x02; // TSAccuracy = 0.2s
+    message[23] = 0x02; // TSAccuracy = 0.2s (redundant OR kept for clarity)
 
     // 字节24: 预留 (已由 memset 置零)
 
@@ -231,7 +231,7 @@ void crid_build_auth_message(const cn_crid_config_t *config, uint8_t *message) {
     (void)config; // unused when auth is none
 
     // 字节1: [AuthType(4)][DataPage(4)]
-    message[1] = (0x00 << 4) | 0x00; // AuthType=None, Page=0
+    message[1] = 0x00; // AuthType=None, Page=0 (redundant OR kept for clarity)
 
     // 字节2: LastPageIndex
     message[2] = 0;
@@ -415,6 +415,10 @@ bool crid_build_beacon_frame(const cn_crid_config_t *config,
     crid_build_operator_id_message(config, operator_id_msg);
     memcpy(&packed_msg[packed_pos], operator_id_msg, CRID_MESSAGE_SIZE);
     packed_pos += CRID_MESSAGE_SIZE;
+
+    // Note: packed_pos is intentionally not used after this point.
+    // The variable tracks the position during message construction above.
+    (void)packed_pos; // Suppress unused variable warning if needed
 
     // 复制打包消息到帧
     memcpy(&frame[pos], packed_msg, PACKED_MSG_TOTAL_LEN);

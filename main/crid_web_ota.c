@@ -81,7 +81,7 @@ static esp_err_t root_get_handler(httpd_req_t *req) {
     SEND_CHUNK(sys_info.sys_time);
     SEND_CHUNK("</td></tr>");
 
-    snprintf(buf, sizeof(buf), "<tr><th>Free Heap</th><td>%lu bytes</td></tr>", sys_info.free_heap);
+    snprintf(buf, sizeof(buf), "<tr><th>Free Heap</th><td>%u bytes</td></tr>", (unsigned int)sys_info.free_heap);
     SEND_CHUNK(buf);
 
     snprintf(buf, sizeof(buf), "<tr><th>Partition</th><td>%s</td></tr>", sys_info.partition_name);
