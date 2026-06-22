@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // ==================== 标准类型枚举 ====================
 typedef enum {
@@ -41,9 +38,5 @@ extern const rid_standard_meta_t g_standard_meta[];
 
 // ==================== 辅助函数 ====================
 const rid_standard_meta_t* rid_get_standard_meta(rid_standard_t std);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // RID_STANDARD_H

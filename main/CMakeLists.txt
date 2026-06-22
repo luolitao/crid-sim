@@ -15,6 +15,9 @@ idf_component_register(
         rid_wifi.c
         rid_ota.c
         rid_web_ota.c
+        rid_api.c
+        rid_auth.c
+        rid_web_html.c
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi

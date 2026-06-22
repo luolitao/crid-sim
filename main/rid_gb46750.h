@@ -6,10 +6,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ==================== GB46750-2025 固定常量 ====================
 #define GB_DATA_TYPE           0xFF        // 数据类型固定值[reference:4]
 #define GB_VERSION_BASE        0x20        // 版本固定 0x20（二进制 001xxxxx）[reference:5]
@@ -187,8 +183,5 @@ int gb46750_encode(const gb46750_data_t *data, uint8_t *out, size_t max_len);
  */
 void gb46750_from_config(const rid_config_t *cfg, gb46750_data_t *out);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // RID_GB46750_H

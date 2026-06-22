@@ -5,10 +5,6 @@
 #include "esp_err.h"
 #include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief 初始化 Wi-Fi 用于 raw 802.11 帧发送
  * @param channel Wi-Fi 信道
@@ -24,8 +20,5 @@ esp_err_t rid_wifi_init(uint8_t channel, const char *ssid);
  */
 esp_err_t rid_wifi_send_raw_frame(const uint8_t *frame, uint16_t len);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // rid_WIFI_H

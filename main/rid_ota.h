@@ -5,9 +5,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // 传统的 URL OTA
 esp_err_t rid_ota_perform(const char *ota_url);
@@ -23,7 +20,5 @@ esp_err_t rid_ota_begin_with_size(rid_ota_handle_t *out_handle, uint32_t image_s
 esp_err_t rid_ota_confirm(void);
 esp_err_t rid_ota_auto_confirm(void);  // 自动确认
 
-#ifdef __cplusplus
-}
-#endif
+
 #endif // RID_OTA_H

@@ -7,9 +7,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // 原有函数声明
 bool rid_build_beacon_frame(const rid_config_t *config,
@@ -24,8 +21,5 @@ bool rid_build_beacon_frame(const rid_config_t *config,
  */
 void rid_beacon_start(rid_config_t *config);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // RID_BEACON_H

@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define RID_SINGLE_MSG_SIZE     25
 #define RID_MAX_PACK_MESSAGES   9
@@ -80,8 +77,5 @@ int rid_pack_messages(uint8_t *out, pack_format_t format,
 // GB46750 专用函数
 int rid_build_gb46750_payload(const rid_config_t *config, uint8_t *out, size_t max_len);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // RID_MESSAGES_H
