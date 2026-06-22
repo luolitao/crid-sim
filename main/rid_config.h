@@ -80,6 +80,7 @@ typedef struct {
     char ssid[rid_SSID_MAX_LEN + 1];
     uint8_t channel;
     uint8_t message_counter;
+    uint8_t flight_mode;
     double base_latitude;
     double base_longitude;
     float base_altitude_msl;

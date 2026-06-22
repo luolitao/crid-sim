@@ -7,10 +7,6 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // 无人机实例结构（公开定义）
 typedef struct drone_instance {
     uint32_t id;
@@ -99,7 +95,6 @@ esp_err_t rid_manager_load_all(void);
 void rid_manager_clear_all(void);
 
 // ==================== 调度器 ====================
-
 /**
  * @brief 启动调度任务（1Hz 轮询所有活跃实例并发送 Beacon）
  */
@@ -108,9 +103,5 @@ void rid_manager_start_dispatcher(void);
 // 可选：遍历所有实例的回调
 typedef void (*instance_callback_t)(drone_instance_t *inst, void *user_ctx);
 void rid_manager_for_each(instance_callback_t cb, void *user_ctx);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // RID_MANAGER_H

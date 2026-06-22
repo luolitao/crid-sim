@@ -142,7 +142,7 @@ void rid_config_init_default(rid_config_t *config) {
     char mac_suffix[5];
     snprintf(mac_suffix, sizeof(mac_suffix), "%02X%02X", config->mac_address[4], config->mac_address[5]);
     
-    snprintf(config->uas_id, sizeof(config->uas_id), "ESP32GB42750IBTM%s", mac_suffix);
+    snprintf(config->uas_id, sizeof(config->uas_id), "ESP32-GB42750%s", mac_suffix);
     config->id_type = 1; // ID_TYPE_SERIAL_NUMBER
     config->ua_type = 1; // UA_TYPE_HELICOPTER
     
@@ -170,6 +170,9 @@ void rid_config_init_default(rid_config_t *config) {
     
     snprintf(config->ssid, sizeof(config->ssid), "ESP32-RID-%s", mac_suffix);
     config->channel = DEFAULT_WIFI_CHANNEL;
+    
+    config->message_counter = 0;
+    config->flight_mode = FLIGHT_MODE_CIRCLE;   // 默认圆周
     
     config->base_latitude = config->latitude;
     config->base_longitude = config->longitude;

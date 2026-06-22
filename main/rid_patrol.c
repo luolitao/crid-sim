@@ -10,13 +10,64 @@
 static const char *TAG = "RID_PATROL";
 static uint32_t flight_tick = 0;
 
+
+void rid_patrol_step(rid_config_t *config) {
+    if (config == NULL) return;
+
+    config->time_counter += 1.0f;
+
+    float angle = config->time_counter * config->patrol_speed;
+
+    // 圆形巡游路径
+    float new_lat = config->base_latitude +
+                    config->patrol_radius_lat * cosf(angle);
+    float new_lon = config->base_longitude +
+                    config->patrol_radius_lon * sinf(angle);
+
+    // 高度周期性缓慢变化：在 45m ~ 55m 之间波动，周期约 62.8 秒
+    // 使用基准高度计算偏移，避免累积误差
+    float alt_offset = 5.0f * sinf(config->time_counter * 0.1f);
+    float new_alt_msl = config->base_altitude_msl + alt_offset;
+    float new_alt_agl = new_alt_msl - 5.0f;
+
+    // 速度变化
+    float new_speed_h = 1.5f + 0.5f * sinf(config->time_counter * 0.1f);
+    // 垂直速度 = 高度对时间的导数：d/dt[5*sin(0.1*t)] = 0.5*cos(0.1*t)
+    // 幅度 ±0.5 m/s，符合低速飞行特征
+    float new_speed_v = 0.5f * cosf(config->time_counter * 0.1f);
+
+    // 航向（基于运动切线方向，正北为0°，顺时针增加）
+    // 位置: lat = base + r_lat*cos(angle), lon = base + r_lon*sin(angle)
+    // d(lat)/dt = -r_lat*sin(angle)*omega, d(lon)/dt = r_lon*cos(angle)*omega
+    // 航向 = atan2(dlon, dlat) （注意：atan2(x, y) 给出从y轴顺时针的角度）
+    float dlat = -config->patrol_radius_lat * sinf(angle) * config->patrol_speed;
+    float dlon = config->patrol_radius_lon * cosf(angle) * config->patrol_speed;
+    float new_heading = atan2f(dlon, dlat) * 180.0f / M_PI;
+    if (new_heading < 0.0f) new_heading += 360.0f;
+
+    rid_config_update_position(config, new_lat, new_lon,
+                                new_alt_msl, new_alt_agl,
+                                new_speed_h, new_speed_v,
+                                new_heading);
+
+    ESP_LOGI(TAG, "Patrol step: pos=(%.6f,%.6f), alt=%.1fm, hdg=%.1f°, spd=%.1fm/s",
+             new_lat, new_lon, new_alt_msl, new_heading, new_speed_h);
+}
+
+
 /**
  * 多模式轨迹状态机计算引擎
  * @param out_lat 计算得到的当前纬度输出
  * @param out_lon 计算得到的当前经度输出
  * @param out_heading 当前航向角输出 (0~360度)
  */
-void rid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading) {
+
+void rid_patrol_calculate_next(double *lat, double *lon, float *heading) {
+    rid_patrol_calculate_next_with_mode(g_rid_config.flight_mode, lat, lon, heading);
+}
+
+void rid_patrol_calculate_next_with_mode(int mode, double *out_lat, double *out_lon, float *out_heading) {
+    // 将原来函数体复制过来，内部使用 mode 变量替代全局 g_rid_config.flight_mode
     flight_tick++;
     double base_lat;
     double base_lon;
@@ -77,47 +128,4 @@ void rid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_head
             *out_heading = 0.0f;
             break;
     }
-}
-
-void rid_patrol_step(rid_config_t *config) {
-    if (config == NULL) return;
-
-    config->time_counter += 1.0f;
-
-    float angle = config->time_counter * config->patrol_speed;
-
-    // 圆形巡游路径
-    float new_lat = config->base_latitude +
-                    config->patrol_radius_lat * cosf(angle);
-    float new_lon = config->base_longitude +
-                    config->patrol_radius_lon * sinf(angle);
-
-    // 高度周期性缓慢变化：在 45m ~ 55m 之间波动，周期约 62.8 秒
-    // 使用基准高度计算偏移，避免累积误差
-    float alt_offset = 5.0f * sinf(config->time_counter * 0.1f);
-    float new_alt_msl = config->base_altitude_msl + alt_offset;
-    float new_alt_agl = new_alt_msl - 5.0f;
-
-    // 速度变化
-    float new_speed_h = 1.5f + 0.5f * sinf(config->time_counter * 0.1f);
-    // 垂直速度 = 高度对时间的导数：d/dt[5*sin(0.1*t)] = 0.5*cos(0.1*t)
-    // 幅度 ±0.5 m/s，符合低速飞行特征
-    float new_speed_v = 0.5f * cosf(config->time_counter * 0.1f);
-
-    // 航向（基于运动切线方向，正北为0°，顺时针增加）
-    // 位置: lat = base + r_lat*cos(angle), lon = base + r_lon*sin(angle)
-    // d(lat)/dt = -r_lat*sin(angle)*omega, d(lon)/dt = r_lon*cos(angle)*omega
-    // 航向 = atan2(dlon, dlat) （注意：atan2(x, y) 给出从y轴顺时针的角度）
-    float dlat = -config->patrol_radius_lat * sinf(angle) * config->patrol_speed;
-    float dlon = config->patrol_radius_lon * cosf(angle) * config->patrol_speed;
-    float new_heading = atan2f(dlon, dlat) * 180.0f / M_PI;
-    if (new_heading < 0.0f) new_heading += 360.0f;
-
-    rid_config_update_position(config, new_lat, new_lon,
-                                new_alt_msl, new_alt_agl,
-                                new_speed_h, new_speed_v,
-                                new_heading);
-
-    ESP_LOGI(TAG, "Patrol step: pos=(%.6f,%.6f), alt=%.1fm, hdg=%.1f°, spd=%.1fm/s",
-             new_lat, new_lon, new_alt_msl, new_heading, new_speed_h);
 }

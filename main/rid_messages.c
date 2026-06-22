@@ -127,7 +127,7 @@ int rid_pack_messages(uint8_t *out, pack_format_t format,
         ESP_LOGE("RID_MSG", "Invalid pack parameters");
         return -1;
     }
-    ESP_LOGI("RID_MSG", "Packing %d messages, format=%d", count, format);
+    // ESP_LOGI("RID_MSG", "Packing %d messages, format=%d", count, format);
     uint8_t temp[RID_MAX_PACK_MESSAGES][RID_SINGLE_MSG_SIZE];
     size_t pos = 0;
     if (format == PACK_FORMAT_ASTM) {

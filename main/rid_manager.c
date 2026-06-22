@@ -349,7 +349,8 @@ static void dispatcher_task(void *arg) {
                 // 计算位置（暂用全局）
                 double lat, lon;
                 float heading;
-                rid_patrol_calculate_next(&lat, &lon, &heading);
+                //rid_patrol_calculate_next(&lat, &lon, &heading);
+                rid_patrol_calculate_next_with_mode(cur->config.flight_mode, &lat, &lon, &heading);
                 rid_config_update_position(&cur->config, (float)lat, (float)lon,
                                             cur->config.altitude_msl,
                                             cur->config.altitude_agl,

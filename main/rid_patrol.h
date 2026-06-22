@@ -3,10 +3,6 @@
 
 #include "rid_config.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * 多模式轨迹状态机计算引擎
  * @param out_lat 计算得到的当前纬度输出
@@ -26,8 +22,6 @@ void rid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_head
 
 void rid_patrol_step(rid_config_t *config);
 
-#ifdef __cplusplus
-}
-#endif
+void rid_patrol_calculate_next_with_mode(int mode, double *lat, double *lon, float *heading);
 
 #endif // rid_PATROL_H

@@ -79,7 +79,7 @@ bool rid_build_beacon_frame(const rid_config_t *config,
         frame[pos++] = message_counter;
         memcpy(&frame[pos], gb_payload, payload_len);
         pos += payload_len;
-        ESP_LOGI(TAG, "GB46750 encoded, total len=%d, payload_len=%d", pos, payload_len);
+        // ESP_LOGI(TAG, "GB46750 encoded, total len=%d, payload_len=%d", pos, payload_len);
     } else {
         ESP_LOGD(TAG, "Using packed messages (ASTM/GB42590)");
         uint8_t packed[RID_MAX_PACK_MESSAGES * RID_SINGLE_MSG_SIZE + 3];
@@ -106,9 +106,9 @@ bool rid_build_beacon_frame(const rid_config_t *config,
     *out_len = pos;
     // ESP_LOGI(TAG, "Beacon built: len=%d", pos);
 
-    // 每10帧打印一次前64字节（调试）
+    // 每256帧打印一次前80字节（调试）
     static uint32_t frame_count = 0;
-    if (++frame_count % 0x0F == 0) {
+    if (++frame_count % 0xFF == 0) {
         ESP_LOGI(TAG, "Frame hex (first 80 bytes):");
         ESP_LOG_BUFFER_HEX(TAG, frame, pos > 80 ? 80 : pos);
     }
