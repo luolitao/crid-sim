@@ -1,12 +1,20 @@
 idf_component_register(
     SRCS
-        main.c
+        app_main.c
         rid_config.c
+        rid_manager.c
+        rid_packer.c
+        rid_beacon.c
+        rid_standard.c
+        rid_messages.c
+        rid_gb46750.c
+        rid_messages_gb46750.c
+        rid_patrol.c
+        rid_standard.c
+        rid_utils.c
+        rid_wifi.c
         rid_ota.c
         rid_web_ota.c
-        encode_gb42590.c
-        rid_wifi.c
-        crid_patrol.c
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi

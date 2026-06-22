@@ -1,4 +1,4 @@
-#include "crid_patrol.h"
+#include "rid_patrol.h"
 #include <math.h>
 #include "esp_log.h"
 #include "rid_config.h"
@@ -7,7 +7,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static const char *TAG = "CN_C-RID_PATROL";
+static const char *TAG = "RID_PATROL";
 static uint32_t flight_tick = 0;
 
 /**
@@ -16,22 +16,22 @@ static uint32_t flight_tick = 0;
  * @param out_lon 计算得到的当前经度输出
  * @param out_heading 当前航向角输出 (0~360度)
  */
-void crid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading) {
+void rid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading) {
     flight_tick++;
     double base_lat;
     double base_lon;
     float speed_factor;
     uint8_t flight_mode;
 
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
+    if (g_rid_config_mutex != NULL) {
+        xSemaphoreTake(g_rid_config_mutex, portMAX_DELAY);
     }
-    base_lat = g_crid_config.init_lat;
-    base_lon = g_crid_config.init_lon;
-    speed_factor = g_crid_config.speed;
-    flight_mode = g_crid_config.flight_mode;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreGive(g_crid_config_mutex);
+    base_lat = g_rid_config.init_lat;
+    base_lon = g_rid_config.init_lon;
+    speed_factor = g_rid_config.speed;
+    flight_mode = g_rid_config.flight_mode;
+    if (g_rid_config_mutex != NULL) {
+        xSemaphoreGive(g_rid_config_mutex);
     }
 
     switch (flight_mode) {
@@ -79,7 +79,7 @@ void crid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_hea
     }
 }
 
-void crid_patrol_step(cn_crid_config_t *config) {
+void rid_patrol_step(rid_config_t *config) {
     if (config == NULL) return;
 
     config->time_counter += 1.0f;
@@ -113,7 +113,7 @@ void crid_patrol_step(cn_crid_config_t *config) {
     float new_heading = atan2f(dlon, dlat) * 180.0f / M_PI;
     if (new_heading < 0.0f) new_heading += 360.0f;
 
-    crid_config_update_position(config, new_lat, new_lon,
+    rid_config_update_position(config, new_lat, new_lon,
                                 new_alt_msl, new_alt_agl,
                                 new_speed_h, new_speed_v,
                                 new_heading);

@@ -14,7 +14,7 @@ static const char *TAG = "RID_WIFI";
 // 【新增】定义 AP 的接入密码 (WPA2 要求密码长度必须在 8~63 个字符之间)
 #define AP_DEFAULT_PASSWORD "12345678"
 
-esp_err_t crid_wifi_init(uint8_t channel, const char *ssid) {
+esp_err_t rid_wifi_init(uint8_t channel, const char *ssid) {
     esp_err_t ret;
     
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -27,7 +27,7 @@ esp_err_t crid_wifi_init(uint8_t channel, const char *ssid) {
     esp_netif_create_default_wifi_ap();
     
     wifi_config_t ap_config = { 0 };
-    const char *ap_ssid = (ssid != NULL && ssid[0] != '\0') ? ssid : "ESP32-CRID-OTA";
+    const char *ap_ssid = (ssid != NULL && ssid[0] != '\0') ? ssid : "ESP32-RID-OTA";
     
     snprintf((char *)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), "%s", ap_ssid);
     ap_config.ap.ssid_len = strlen((char *)ap_config.ap.ssid);
@@ -79,16 +79,15 @@ esp_err_t crid_wifi_init(uint8_t channel, const char *ssid) {
     return ESP_OK;
 }
 
-esp_err_t crid_wifi_send_raw_frame(const uint8_t *frame, uint16_t len) {
-    if (frame == NULL || len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
+
+esp_err_t rid_wifi_send_raw_frame(const uint8_t *frame, uint16_t len) {
+    if (!frame || len == 0) return ESP_ERR_INVALID_ARG;
+    ESP_LOGD(TAG, "Sending raw frame len=%d", len);
     esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, len, false);
     if (ret == ESP_OK) {
-        return ESP_OK;
+        ESP_LOGI(TAG, "✅ Frame sent successfully, len=%d", len);
+    } else {
+        ESP_LOGE(TAG, "❌ Send failed: %s (len=%d)", esp_err_to_name(ret), len);
     }
-    
-    ESP_LOGE(TAG, "esp_wifi_80211_tx(AP) failed: %s", esp_err_to_name(ret));
     return ret;
 }

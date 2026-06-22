@@ -1,14 +1,14 @@
-#ifndef CRID_WEB_OTA_H
-#define CRID_WEB_OTA_H
+#ifndef rid_WEB_OTA_H
+#define rid_WEB_OTA_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void crid_web_ota_init(void);
+void rid_web_ota_init(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CRID_WEB_OTA_H
+#endif // rid_WEB_OTA_H

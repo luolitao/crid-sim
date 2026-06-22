@@ -1,10 +1,10 @@
-#ifndef CRID_CONFIG_H
-#define CRID_CONFIG_H
+#ifndef RID_CONFIG_H
+#define RID_CONFIG_H
 
 #include "esp_err.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 #include <stdint.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"   // 提供 SemaphoreHandle_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,8 +28,6 @@ enum class CNFlightZone : uint8_t {
 
 #endif
 
-
-
 // 飞行模式枚举
 typedef enum {
     FLIGHT_MODE_CIRCLE = 0,
@@ -45,20 +43,20 @@ typedef struct {
     float speed;
     uint8_t flight_mode;
     uint8_t channel;
-} crid_dynamic_config_t;
+} rid_dynamic_config_t;
 
-extern crid_dynamic_config_t g_crid_config;
-extern SemaphoreHandle_t g_crid_config_mutex;
+extern rid_dynamic_config_t g_rid_config;
+extern SemaphoreHandle_t g_rid_config_mutex;
 
-#define CRID_NVS_NAMESPACE "crid_cfg"
-#define CRID_UAS_ID_MAX_LEN 20
-#define CRID_SSID_MAX_LEN 32
+#define rid_NVS_NAMESPACE "rid_cfg"
+#define rid_UAS_ID_MAX_LEN 20
+#define rid_SSID_MAX_LEN 32
 #define DEFAULT_WIFI_CHANNEL 6
 
 // 完整配置结构体 (用于报文构建)
 typedef struct {
     uint8_t mac_address[6];
-    char uas_id[CRID_UAS_ID_MAX_LEN + 1];
+    char uas_id[rid_UAS_ID_MAX_LEN + 1];
     uint8_t id_type;
     uint8_t ua_type;
     float latitude;
@@ -72,14 +70,14 @@ typedef struct {
     float operator_lat;
     float operator_lon;
     float operator_alt;
-    char operator_id[CRID_UAS_ID_MAX_LEN + 1];
-    char drone_name[CRID_UAS_ID_MAX_LEN + 1];
+    char operator_id[rid_UAS_ID_MAX_LEN + 1];
+    char drone_name[rid_UAS_ID_MAX_LEN + 1];
     uint8_t operator_location_type;
     uint8_t classification_type;
     uint8_t category_eu;
     uint8_t class_eu;
     uint8_t height_type;
-    char ssid[CRID_SSID_MAX_LEN + 1];
+    char ssid[rid_SSID_MAX_LEN + 1];
     uint8_t channel;
     uint8_t message_counter;
     double base_latitude;
@@ -89,7 +87,7 @@ typedef struct {
     float patrol_radius_lon;
     float patrol_speed;
     float time_counter;
-} cn_crid_config_t;
+} rid_config_t;
 
 // ================= 新增：系统与配置管理 API =================
 
@@ -102,29 +100,29 @@ typedef struct {
     char sys_time[32];
     uint32_t free_heap;
     char partition_name[16];
-} crid_sys_info_t;
+} rid_sys_info_t;
 
 // 获取当前系统运行信息
-void crid_get_sys_info(crid_sys_info_t *info);
+void rid_get_sys_info(rid_sys_info_t *info);
 
 // 线程安全地获取当前配置快照
-void crid_get_config_snapshot(crid_dynamic_config_t *cfg);
+void rid_get_config_snapshot(rid_dynamic_config_t *cfg);
 
 // 初始化 SNTP 时间同步
-void crid_time_sync_init(void);
+void rid_time_sync_init(void);
 
 // NVS 配置管理
-esp_err_t crid_nvs_init(void);
-esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg);
-esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg);
+esp_err_t rid_nvs_init(void);
+esp_err_t rid_nvs_load_config(rid_dynamic_config_t *cfg);
+esp_err_t rid_nvs_save_config(const rid_dynamic_config_t *cfg);
 
 // 配置初始化与更新
-void crid_config_init_default(cn_crid_config_t *config);
-void crid_config_update_position(cn_crid_config_t *config, float lat, float lon,
+void rid_config_init_default(rid_config_t *config);
+void rid_config_update_position(rid_config_t *config, float lat, float lon,
                                  float alt_msl, float alt_agl, float speed_h, 
                                  float speed_v, float heading);
 
 #ifdef __cplusplus
 }
 #endif
-#endif // CRID_CONFIG_H
+#endif // RID_CONFIG_H

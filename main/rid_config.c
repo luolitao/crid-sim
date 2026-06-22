@@ -15,12 +15,12 @@
 
 static const char *TAG = "RID_CFG";
 
-crid_dynamic_config_t g_crid_config;
-SemaphoreHandle_t g_crid_config_mutex = NULL;
+rid_dynamic_config_t g_rid_config;
+SemaphoreHandle_t g_rid_config_mutex = NULL;
 
 // ================= 系统与配置管理实现 =================
 
-void crid_get_sys_info(crid_sys_info_t *info) {
+void rid_get_sys_info(rid_sys_info_t *info) {
     if (!info) return;
     
     // 【修复】直接使用编译期宏 CONFIG_IDF_TARGET 获取芯片型号
@@ -55,14 +55,14 @@ void crid_get_sys_info(crid_sys_info_t *info) {
     snprintf(info->partition_name, sizeof(info->partition_name), "%.15s", part ? part->label : "Unknown");
 }
 
-void crid_get_config_snapshot(crid_dynamic_config_t *cfg) {
+void rid_get_config_snapshot(rid_dynamic_config_t *cfg) {
     if (!cfg) return;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
+    if (g_rid_config_mutex != NULL) {
+        xSemaphoreTake(g_rid_config_mutex, portMAX_DELAY);
     }
-    *cfg = g_crid_config;
-    if (g_crid_config_mutex != NULL) {
-        xSemaphoreGive(g_crid_config_mutex);
+    *cfg = g_rid_config;
+    if (g_rid_config_mutex != NULL) {
+        xSemaphoreGive(g_rid_config_mutex);
     }
 }
 
@@ -70,7 +70,7 @@ static void time_sync_notification_cb(struct timeval *tv) {
     ESP_LOGI(TAG, "SNTP Time synchronized!");
 }
 
-void crid_time_sync_init(void) {
+void rid_time_sync_init(void) {
     ESP_LOGI(TAG, "Initializing SNTP");
     esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
@@ -80,15 +80,15 @@ void crid_time_sync_init(void) {
 
 // ================= 原有 NVS 与配置逻辑 =================
 
-esp_err_t crid_nvs_init(void) {
+esp_err_t rid_nvs_init(void) {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    if (ret == ESP_OK && g_crid_config_mutex == NULL) {
-        g_crid_config_mutex = xSemaphoreCreateMutex();
-        if (g_crid_config_mutex == NULL) {
+    if (ret == ESP_OK && g_rid_config_mutex == NULL) {
+        g_rid_config_mutex = xSemaphoreCreateMutex();
+        if (g_rid_config_mutex == NULL) {
             ESP_LOGE(TAG, "Failed to create config mutex");
             return ESP_FAIL;
         }
@@ -96,19 +96,19 @@ esp_err_t crid_nvs_init(void) {
     return ret;
 }
 
-esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg) {
+esp_err_t rid_nvs_load_config(rid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READONLY, &handle);
+    esp_err_t err = nvs_open(rid_NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
         cfg->init_lat = 23.14287;
         cfg->init_lon = 113.26026;
         cfg->speed = 0.2f;
         cfg->flight_mode = FLIGHT_MODE_CIRCLE;
-        cfg->channel = 6;
+        cfg->channel = DEFAULT_WIFI_CHANNEL;
         ESP_LOGW(TAG, "NVS space empty. Loaded default factory config.");
         return ESP_OK;
     }
-    size_t size = sizeof(crid_dynamic_config_t);
+    size_t size = sizeof(rid_dynamic_config_t);
     err = nvs_get_blob(handle, "config_blob", cfg, &size);
     nvs_close(handle);
     if (err == ESP_OK) {
@@ -117,11 +117,11 @@ esp_err_t crid_nvs_load_config(crid_dynamic_config_t *cfg) {
     return err;
 }
 
-esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg) {
+esp_err_t rid_nvs_save_config(const rid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(CRID_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    esp_err_t err = nvs_open(rid_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
-    err = nvs_set_blob(handle, "config_blob", cfg, sizeof(crid_dynamic_config_t));
+    err = nvs_set_blob(handle, "config_blob", cfg, sizeof(rid_dynamic_config_t));
     if (err == ESP_OK) {
         err = nvs_commit(handle);
         ESP_LOGI(TAG, "Config saved and committed to NVS.");
@@ -130,9 +130,9 @@ esp_err_t crid_nvs_save_config(const crid_dynamic_config_t *cfg) {
     return err;
 }
 
-void crid_config_init_default(cn_crid_config_t *config) {
+void rid_config_init_default(rid_config_t *config) {
     if (config == NULL) return;
-    memset(config, 0, sizeof(cn_crid_config_t));
+    memset(config, 0, sizeof(rid_config_t));
     
     config->mac_address[0] = 0x24; config->mac_address[1] = 0x0A;
     config->mac_address[2] = 0xC4; config->mac_address[3] = 0x12;
@@ -159,7 +159,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->operator_lon = 113.260734f;
     config->operator_alt = 10.0f;
     
-    snprintf(config->operator_id, sizeof(config->operator_id), "ESP32-CRID-OP-%s", mac_suffix);
+    snprintf(config->operator_id, sizeof(config->operator_id), "ESP32-RID-OP-%s", mac_suffix);
     strncpy(config->drone_name, "ESP32S3", sizeof(config->drone_name) - 1);
     
     config->operator_location_type = 0; // OP_LOC_TYPE_LIVE_GNSS
@@ -168,7 +168,7 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->class_eu = 0;
     config->height_type = 0; // HEIGHT_REF_OVER_TAKEOFF
     
-    snprintf(config->ssid, sizeof(config->ssid), "ESP32-CRID-%s", mac_suffix);
+    snprintf(config->ssid, sizeof(config->ssid), "ESP32-RID-%s", mac_suffix);
     config->channel = DEFAULT_WIFI_CHANNEL;
     
     config->base_latitude = config->latitude;
@@ -178,10 +178,10 @@ void crid_config_init_default(cn_crid_config_t *config) {
     config->patrol_radius_lon = 0.00004f;
     config->patrol_speed = 0.2f;
     
-    ESP_LOGI(TAG, "China C-RID configuration initialized");
+    ESP_LOGI(TAG, "China RID configuration initialized");
 }
 
-void crid_config_update_position(cn_crid_config_t *config, float lat, float lon,
+void rid_config_update_position(rid_config_t *config, float lat, float lon,
                                  float alt_msl, float alt_agl, float speed_h, 
                                  float speed_v, float heading) {
     if (config == NULL) return;

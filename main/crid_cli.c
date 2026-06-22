@@ -7,7 +7,7 @@
 #include "rid_config.h"
 #include "rid_ota.h"
 
-static const char *TAG = "CRID_CLI";
+static const char *TAG = "rid_CLI";
 #define BUF_SIZE (256)
 
 static void cli_task(void *pvParameters) {
@@ -38,29 +38,29 @@ static void cli_task(void *pvParameters) {
 
         // 解析指令 格式: SET 23.123 113.123 1
         if (sscanf(data, "%15s %191s", cmd, ota_url) == 2 && strcmp(cmd, "OTA") == 0) {
-            esp_err_t ota_ret = crid_ota_perform(ota_url);
+            esp_err_t ota_ret = rid_ota_perform(ota_url);
             if (ota_ret != ESP_OK) {
                 printf("\r\n[OTA ERROR] Update failed: %s\n", esp_err_to_name(ota_ret));
             }
         } else if (sscanf(data, "%15s %lf %lf %d", cmd, &t_lat, &t_lon, &t_mode) == 4) {
             if (strcmp(cmd, "SET") == 0 && t_mode >= 0 && t_mode < FLIGHT_MODE_MAX) {
                 // 动态更新内存全局变量
-                crid_dynamic_config_t config_snapshot;
-                if (g_crid_config_mutex != NULL) {
-                    xSemaphoreTake(g_crid_config_mutex, portMAX_DELAY);
+                rid_dynamic_config_t config_snapshot;
+                if (g_rid_config_mutex != NULL) {
+                    xSemaphoreTake(g_rid_config_mutex, portMAX_DELAY);
                 }
-                g_crid_config.init_lat = t_lat;
-                g_crid_config.init_lon = t_lon;
-                g_crid_config.flight_mode = (uint8_t)t_mode;
-                config_snapshot = g_crid_config;
-                if (g_crid_config_mutex != NULL) {
-                    xSemaphoreGive(g_crid_config_mutex);
+                g_rid_config.init_lat = t_lat;
+                g_rid_config.init_lon = t_lon;
+                g_rid_config.flight_mode = (uint8_t)t_mode;
+                config_snapshot = g_rid_config;
+                if (g_rid_config_mutex != NULL) {
+                    xSemaphoreGive(g_rid_config_mutex);
                 }
 
                 printf("\r\n[CLI SUCCESS] Target updated to Lat:%lf, Lon:%lf, Mode:%d\n", t_lat, t_lon, t_mode);
 
                 // 持久化存储，下次掉电不丢失
-                crid_nvs_save_config(&config_snapshot);
+                rid_nvs_save_config(&config_snapshot);
             } else {
                 printf("\r\n[CLI ERROR] Unknown command or invalid mode.\n");
             }
@@ -69,7 +69,7 @@ static void cli_task(void *pvParameters) {
     free(data);
 }
 
-void crid_cli_init(void) {
+void rid_cli_init(void) {
     // 确保开发板串口驱动在核心层已初始化完毕
-    xTaskCreate(cli_task, "crid_cli_task", 4096, NULL, 5, NULL);
+    xTaskCreate(cli_task, "rid_cli_task", 4096, NULL, 5, NULL);
 }

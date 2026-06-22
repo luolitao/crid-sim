@@ -1,5 +1,5 @@
-#ifndef CRID_PATROL_H
-#define CRID_PATROL_H
+#ifndef rid_PATROL_H
+#define rid_PATROL_H
 
 #include "rid_config.h"
 
@@ -13,7 +13,7 @@ extern "C" {
  * @param out_lon 计算得到的当前经度输出
  * @param out_heading 当前航向角输出 (0~360度)
  */
-void crid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading);
+void rid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_heading);
 
 /**
  * @brief 执行一步巡游位置更新
@@ -24,10 +24,10 @@ void crid_patrol_calculate_next(double *out_lat, double *out_lon, float *out_hea
  * @param config 配置结构体指针（会原地更新）
  */
 
-void crid_patrol_step(cn_crid_config_t *config);
+void rid_patrol_step(rid_config_t *config);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CRID_PATROL_H
+#endif // rid_PATROL_H
