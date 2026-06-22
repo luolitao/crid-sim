@@ -1,8 +1,5 @@
-# This file was generated using idf.py save-defconfig. It can be edited manually.
-# Espressif IoT Development Framework (ESP-IDF) Project Minimal Configuration
-#
-# 1. 强制单核模式 (保持之前的修复)
-CONFIG_FREERTOS_UNICORE=y
-
-# 2. 禁用蓝牙 (单核下更稳定，如果您的项目不需要蓝牙)
-CONFIG_BT_ENABLED=n
+CONFIG_BT_ENABLED=y
+CONFIG_ESP32_IGNORE_MAC_CRC_ERROR=y
+CONFIG_ESP32S3_IGNORE_MAC_CRC_ERROR=y
+CONFIG_ESP32C3_IGNORE_MAC_CRC_ERROR=y
+CONFIG_MBEDTLS_SHA256_ENABLED=y
