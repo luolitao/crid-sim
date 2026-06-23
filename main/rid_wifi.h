@@ -12,13 +12,13 @@
  */
 esp_err_t rid_wifi_init(uint8_t channel, const char *ssid);
 
-/**
- * @brief 发送 raw 802.11 帧，带 fallback 机制
- * @param frame 帧数据
- * @param len 帧长度
- * @return ESP_OK 成功
- */
-esp_err_t rid_wifi_send_raw_frame(const uint8_t *frame, uint16_t len);
 
+/**
+ * @brief 设置 Vendor IE 的 Payload (RID 数据 + Counter)
+ * @param payload 指向 RID 编码后的数据（不含 OUI 和 Type）
+ * @param payload_len 数据长度（不含 Counter）
+ * @param counter 消息计数器（1 字节）
+ */
+esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint8_t counter);
 
 #endif // rid_WIFI_H

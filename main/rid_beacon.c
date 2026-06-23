@@ -19,7 +19,7 @@ bool rid_build_beacon_frame(const rid_config_t *config,
         return false;
     }
 
-    ESP_LOGI(TAG, "Building beacon: standard=%d, counter=%d, len=%d", 
+    ESP_LOGD(TAG, "Building beacon: standard=%d, counter=%d, len=%d", 
              meta->standard, message_counter, max_len);
 
     uint16_t pos = 0;
@@ -109,8 +109,8 @@ bool rid_build_beacon_frame(const rid_config_t *config,
     // 每256帧打印一次前80字节（调试）
     static uint32_t frame_count = 0;
     if (++frame_count % 0xFF == 0) {
-        ESP_LOGI(TAG, "Frame hex (first 80 bytes):");
-        ESP_LOG_BUFFER_HEX(TAG, frame, pos > 80 ? 80 : pos);
+        ESP_LOGD(TAG, "Frame hex (first 80 bytes):");
+        // ESP_LOG_BUFFER_HEX(TAG, frame, pos > 80 ? 80 : pos);
     }
 
     return true;

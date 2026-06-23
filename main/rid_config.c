@@ -181,7 +181,7 @@ void rid_config_init_default(rid_config_t *config) {
     config->patrol_radius_lon = 0.00004f;
     config->patrol_speed = 0.2f;
     
-    ESP_LOGI(TAG, "China RID configuration initialized");
+    ESP_LOGI(TAG, "Remote ID configuration initialized");
 }
 
 void rid_config_update_position(rid_config_t *config, float lat, float lon,
@@ -200,7 +200,7 @@ void rid_config_update_position(rid_config_t *config, float lat, float lon,
     config->heading = heading;
     
     if ((s_update_count % 10U) == 1U) {
-        ESP_LOGI(TAG, "Position updated: %.6f, %.6f, Alt: %.2fm, Hdg: %.1f",
+        ESP_LOGD(TAG, "Position updated: %.6f, %.6f, Alt: %.2fm, Hdg: %.1f",
                  config->latitude, config->longitude, config->altitude_msl, config->heading);
     }
 }

@@ -5,6 +5,9 @@
 #include "rid_config.h"
 #include "rid_standard.h"
 #include "rid_messages.h"
+#include "rid_gb46750.h"
+
+
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_log.h"
@@ -73,7 +76,7 @@ esp_err_t rid_manager_create(rid_standard_t standard, const rid_config_t *init_c
     unlock();
 
     if (out_id) *out_id = inst->id;
-    ESP_LOGI(TAG, "Created instance ID=%u, standard=%d", inst->id, standard);
+    ESP_LOGD(TAG, "Created instance ID=%u, standard=%d", inst->id, standard);
     return ESP_OK;
 }
 
@@ -358,27 +361,35 @@ static void dispatcher_task(void *arg) {
                                             cur->config.speed_vertical,
                                             heading);
 
-                uint8_t frame[512];
-                uint16_t len;
+                
                 const rid_standard_meta_t *meta = rid_get_standard_meta(cur->standard);
                 if (meta == NULL) {
                     ESP_LOGE(TAG, "Instance %u: unknown standard", cur->id);
                     cur = cur->next;
                     continue;
                 }
-                ESP_LOGD(TAG, "Instance %u building frame, standard=%d", cur->id, cur->standard);
-                if (rid_build_beacon_frame(&cur->config, cur->message_counter, meta,
-                                           frame, sizeof(frame), &len)) {
-                    ESP_LOGD(TAG, "Instance %u frame built len=%d", cur->id, len);
-                    esp_err_t ret = rid_wifi_send_raw_frame(frame, len);
+                ESP_LOGI(TAG, "Instance %u building frame, standard=%d", cur->id, cur->standard);
+                
+                // 构建 RID payload（打包后的数据）
+                uint8_t payload[RID_MAX_PACK_MESSAGES * RID_SINGLE_MSG_SIZE + 3]; // 最大长度
+                int payload_len = 0;
+                if (meta->use_gb46750_encoder) {
+                    // GB46750 直接编码
+                    payload_len = rid_build_gb46750_payload(&cur->config, payload, sizeof(payload));
+                } else {
+                    // ASTM / GB42590：使用打包函数
+                    payload_len = rid_pack_messages(payload, meta->pack_format, meta->builders, meta->msg_count, &cur->config);
+                }
+                if (payload_len > 0) {
+                    esp_err_t ret = rid_wifi_set_rid_data(payload, payload_len, cur->message_counter);
                     if (ret == ESP_OK) {
                         cur->message_counter++;
-                        ESP_LOGD(TAG, "Instance %u sent OK, counter=%d", cur->id, cur->message_counter);
+                        ESP_LOGD(TAG, "Instance %u RID data updated", cur->id);
                     } else {
-                        ESP_LOGE(TAG, "Instance %u send failed: %s", cur->id, esp_err_to_name(ret));
+                        ESP_LOGE(TAG, "Instance %u set RID data failed: %s", cur->id, esp_err_to_name(ret));
                     }
                 } else {
-                    ESP_LOGE(TAG, "Instance %u build frame failed", cur->id);
+                    ESP_LOGE(TAG, "Instance %u payload build failed", cur->id);
                 }
             }
             cur = cur->next;

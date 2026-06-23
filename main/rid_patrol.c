@@ -50,7 +50,7 @@ void rid_patrol_step(rid_config_t *config) {
                                 new_speed_h, new_speed_v,
                                 new_heading);
 
-    ESP_LOGI(TAG, "Patrol step: pos=(%.6f,%.6f), alt=%.1fm, hdg=%.1f°, spd=%.1fm/s",
+    ESP_LOGD(TAG, "Patrol step: pos=(%.6f,%.6f), alt=%.1fm, hdg=%.1f°, spd=%.1fm/s",
              new_lat, new_lon, new_alt_msl, new_heading, new_speed_h);
 }
 

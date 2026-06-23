@@ -16,6 +16,13 @@ static const char *TAG = "RID_MAIN";
 
 void app_main(void) {
     ESP_LOGI(TAG, "=== ESP32 Multi-Standard Remote ID Simulator ===");
+
+    // 1. 必须在最开头调用，覆盖损坏的 MAC
+    uint8_t custom_mac[6] = {0x24, 0x0A, 0xC4, 0x12, 0x34, 0x56};
+    //ESP_ERROR_CHECK(esp_base_mac_addr_set(custom_mac));
+    ESP_LOGI(TAG, "Custom MAC set to: %02X:%02X:%02X:%02X:%02X:%02X",
+             custom_mac[0], custom_mac[1], custom_mac[2],
+             custom_mac[3], custom_mac[4], custom_mac[5]);
     // 1. 初始化 NVS
     esp_err_t ret = rid_nvs_init();
     if (ret != ESP_OK) { ESP_LOGE(TAG, "NVS Init Failed"); return; }
@@ -57,15 +64,14 @@ void app_main(void) {
         }
     }
 
-    // 5. 初始化 Wi-Fi 等
-    
+    // 5. 初始化 Wi-Fi 等    
     // 初始化网络
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     
     // 初始化 Wi-Fi
     ret = rid_wifi_init(g_rid_config.channel, "ESP32-RID-Simulator");
-    if (ret != ESP_OK) return;    
+    if (ret != ESP_OK) return;   
     
     
     // 启动 Web OTA

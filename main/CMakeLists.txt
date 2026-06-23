@@ -3,7 +3,6 @@ idf_component_register(
         app_main.c
         rid_config.c
         rid_manager.c
-        rid_packer.c
         rid_beacon.c
         rid_standard.c
         rid_messages.c

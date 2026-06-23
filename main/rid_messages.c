@@ -124,10 +124,10 @@ int rid_pack_messages(uint8_t *out, pack_format_t format,
                       const msg_builder_t builders[], uint8_t count,
                       const rid_config_t *config) {
     if (!out || !builders || count == 0) {
-        ESP_LOGE("RID_MSG", "Invalid pack parameters");
+        ESP_LOGE(TAG, "Invalid pack parameters");
         return -1;
     }
-    // ESP_LOGI("RID_MSG", "Packing %d messages, format=%d", count, format);
+    // ESP_LOGI(TAG, "Packing %d messages, format=%d", count, format);
     uint8_t temp[RID_MAX_PACK_MESSAGES][RID_SINGLE_MSG_SIZE];
     size_t pos = 0;
     if (format == PACK_FORMAT_ASTM) {
@@ -138,7 +138,7 @@ int rid_pack_messages(uint8_t *out, pack_format_t format,
         out[pos++] = RID_SINGLE_MSG_SIZE;
         out[pos++] = count;
     } else {
-        ESP_LOGE("RID_MSG", "Unsupported format");
+        ESP_LOGE(TAG, "Unsupported format");
         return -1;
     }
     for (int i = 0; i < count; i++) {
@@ -146,7 +146,7 @@ int rid_pack_messages(uint8_t *out, pack_format_t format,
         memcpy(out + pos, temp[i], RID_SINGLE_MSG_SIZE);
         pos += RID_SINGLE_MSG_SIZE;
     }
-    // ESP_LOGI("RID_MSG", "Packed %d bytes, header type %d", pos, format);
+    ESP_LOGD(TAG, "Packed %d bytes, header type %d", pos, format);
     // ESP_LOG_BUFFER_HEX(TAG, out, pos > 16 ? 16 : pos);
     return (int)pos;
 }

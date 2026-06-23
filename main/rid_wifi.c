@@ -11,98 +11,93 @@
 #include "rid_wifi.h"
 
 static const char *TAG = "RID_WIFI";
+static bool s_wifi_driver_inited = false;
 
-// 【新增】定义 AP 的接入密码 (WPA2 要求密码长度必须在 8~63 个字符之间)
+#define RID_OUI_0  0xFA
+#define RID_OUI_1  0x0B
+#define RID_OUI_2  0xBC
+#define RID_OUI_TYPE 0x0D
 #define AP_DEFAULT_PASSWORD "12345678"
 
 esp_err_t rid_wifi_init(uint8_t channel, const char *ssid) {
-    esp_err_t ret;
-    
-    // 【关键修复】强制设置自定义 MAC，绕过 EFUSE CRC 错误
-    // 假设 config 已传入，这里我们使用全局配置中的 mac_address
-    // 如果 config 未传入，可以硬编码一个有效 MAC
-    uint8_t default_mac[6] = {0x24, 0x0A, 0xC4, 0x12, 0x34, 0x56};
-    esp_err_t mac_ret = esp_base_mac_addr_set(default_mac);
-    if (mac_ret != ESP_OK && mac_ret != ESP_ERR_INVALID_ARG) {
-        ESP_LOGW(TAG, "esp_base_mac_addr_set failed: %s", esp_err_to_name(mac_ret));
-    } else {
-        ESP_LOGI(TAG, "Custom MAC set: %02X:%02X:%02X:%02X:%02X:%02X",
-                 default_mac[0], default_mac[1], default_mac[2],
-                 default_mac[3], default_mac[4], default_mac[5]);
+    // ... 已有代码（esp_netif_init, esp_event_loop_create_default）...
+    // 注意：这些在 wifi_tx.cpp 的 init() 中也被调用
+    // 生成或使用自定义 MAC
+    uint8_t mac[6] = {0x24, 0x0A, 0xC4, 0x12, 0x34, 0x56};
+    // 注意：wifi_tx.cpp 使用随机 MAC，但为了固定，我们使用自定义
+
+    // 初始化 Wi-Fi 驱动（与 wifi_tx.cpp 相同）
+    if (!s_wifi_driver_inited) {
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        esp_err_t ret = esp_wifi_init(&cfg);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "esp_wifi_init failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+        s_wifi_driver_inited = true;
     }
 
-    // 初始化 Wi-Fi
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ret = esp_wifi_init(&cfg);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_init failed: %s", esp_err_to_name(ret));
-        return ret;
+    // 设置 AP 接口的 MAC（在 esp_wifi_init 之后，esp_wifi_start 之前）
+    esp_err_t mac_ret = esp_wifi_set_mac(WIFI_IF_AP, mac);
+    if (mac_ret != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_set_mac failed: %s", esp_err_to_name(mac_ret));
+    } else {
+        ESP_LOGI(TAG, "AP MAC set to: %02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
-    
-    esp_netif_create_default_wifi_ap();
-    
-    wifi_config_t ap_config = { 0 };
-    const char *ap_ssid = (ssid != NULL && ssid[0] != '\0') ? ssid : "ESP32-RID-OTA";
-    
-    snprintf((char *)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), "%s", ap_ssid);
-    ap_config.ap.ssid_len = strlen((char *)ap_config.ap.ssid);
-    ap_config.ap.channel = channel;
-    
-    // 【修改】将加密模式从 OPEN 改为 WPA2_PSK
-    ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
-    
-    // 【新增】设置 AP 密码
-    strncpy((char *)ap_config.ap.password, AP_DEFAULT_PASSWORD, sizeof(ap_config.ap.password) - 1);
-    
-    ap_config.ap.max_connection = 4;
-    ap_config.ap.beacon_interval = 100;
-    
-    ret = esp_wifi_set_mode(WIFI_MODE_AP);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_mode failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    ret = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_config(AP) failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    ret = esp_wifi_start();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_start failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    vTaskDelay(pdMS_TO_TICKS(100));
-    
-    ret = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_channel failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    ret = esp_wifi_set_promiscuous(true);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_promiscuous failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    ESP_LOGI(TAG, "Wi-Fi initialized: AP mode, channel=%u, SSID=%s, Password=%s", 
-             channel, ap_config.ap.ssid, AP_DEFAULT_PASSWORD);
+
+    // 配置 AP（与 wifi_tx.cpp 类似）
+    wifi_config_t wifi_config = {};
+    strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
+    wifi_config.ap.ssid_len = strlen(ssid);
+    strncpy((char*)wifi_config.ap.password, AP_DEFAULT_PASSWORD, sizeof(wifi_config.ap.password) - 1);
+    wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_config.ap.channel = channel;
+    wifi_config.ap.max_connection = 4;
+    wifi_config.ap.ssid_hidden = 0;
+
+    esp_wifi_set_mode(WIFI_MODE_AP);
+    esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
+
+    // 启动 Wi-Fi
+    esp_wifi_start();
+
+    ESP_LOGI(TAG, "Wi-Fi initialized: AP mode, channel=%d, SSID=%s", channel, ssid);
     return ESP_OK;
 }
 
 
-esp_err_t rid_wifi_send_raw_frame(const uint8_t *frame, uint16_t len) {
-    if (!frame || len == 0) return ESP_ERR_INVALID_ARG;
-    ESP_LOGD(TAG, "Sending raw frame len=%d", len);
-    esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, len, false);
+esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint8_t counter) {
+    if (!payload || payload_len == 0) return ESP_ERR_INVALID_ARG;
+
+    // 清除旧 IE
+    esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, NULL);
+    esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, NULL);
+
+    // 使用静态缓冲区
+    static uint8_t ie_buffer[256];
+    size_t total_len = 2 + 3 + 1 + 1 + payload_len; // id + len + OUI + type + counter + data
+    if (total_len > sizeof(ie_buffer)) {
+        ESP_LOGE(TAG, "IE buffer too small");
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    uint8_t *ptr = ie_buffer;
+    *ptr++ = WIFI_VENDOR_IE_ELEMENT_ID;
+    *ptr++ = (uint8_t)(3 + 1 + 1 + payload_len);
+    *ptr++ = RID_OUI_0;
+    *ptr++ = RID_OUI_1;
+    *ptr++ = RID_OUI_2;
+    *ptr++ = RID_OUI_TYPE;
+    *ptr++ = counter;
+    memcpy(ptr, payload, payload_len);
+
+    esp_err_t ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, (vendor_ie_data_t *)ie_buffer);
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "✅ Frame sent successfully, len=%d", len);
-    } else {
-        ESP_LOGE(TAG, "❌ Send failed: %s (len=%d)", esp_err_to_name(ret), len);
+        ESP_LOGD(TAG, "esp_wifi_set_vendor_ie WIFI_VND_IE_TYPE_BEACON OK!");
+        // ESP_LOG_BUFFER_HEX(TAG, ie_buffer, payload_len > 64 ? 64 : payload_len);
+        ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, (vendor_ie_data_t *)ie_buffer);
+        if (ret == ESP_OK) ESP_LOGD(TAG, "WIFI_VND_IE_TYPE_PROBE_RESP OK!");
     }
     return ret;
 }
