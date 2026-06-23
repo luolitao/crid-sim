@@ -6,8 +6,6 @@
 #include "rid_auth.h"
 
 
-
-
 // ==================== 辅助：从 URL 查询字符串提取 id ====================
 static bool get_id_from_query(httpd_req_t *req, uint32_t *id) {
     char query[64];
@@ -63,23 +61,15 @@ esp_err_t instances_get_handler(httpd_req_t *req) {
 
 // POST /api/instance
 esp_err_t instance_post_handler(httpd_req_t *req) {
-    if (!validate_auth(req)) {
-        httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"C-RID OTA\"");
-        return httpd_resp_sendstr(req, "Unauthorized");
-    }
+    if (!validate_auth(req)) { /* ... */ }
     char buf[512];
-    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (len <= 0) {
-        httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Empty body");
-    }
+    int len = httpd_req_recv(req, buf, sizeof(buf)-1);
+    if (len <= 0) return httpd_resp_sendstr(req, "Empty body");
     buf[len] = '\0';
     cJSON *json = cJSON_Parse(buf);
-    if (!json) {
-        httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Invalid JSON");
-    }
+    if (!json) return httpd_resp_sendstr(req, "Invalid JSON");
+
+    // 解析所有字段
     cJSON *standard = cJSON_GetObjectItem(json, "standard");
     cJSON *uas_id = cJSON_GetObjectItem(json, "uas_id");
     cJSON *lat = cJSON_GetObjectItem(json, "latitude");
@@ -91,25 +81,29 @@ esp_err_t instance_post_handler(httpd_req_t *req) {
         httpd_resp_set_status(req, "400 Bad Request");
         return httpd_resp_sendstr(req, "Missing fields");
     }
+
     rid_config_t cfg;
     rid_config_init_default(&cfg);
-    strncpy(cfg.uas_id, uas_id->valuestring, sizeof(cfg.uas_id) - 1);
+    strncpy(cfg.uas_id, uas_id->valuestring, sizeof(cfg.uas_id)-1);
     cfg.latitude = (float)lat->valuedouble;
     cfg.longitude = (float)lon->valuedouble;
     cfg.altitude_msl = (float)alt->valuedouble;
     cfg.altitude_agl = (float)alt->valuedouble;
     cfg.flight_mode = (uint8_t)mode->valueint;
+
     uint32_t id;
     esp_err_t ret = rid_manager_create((rid_standard_t)standard->valueint, &cfg, &id);
     cJSON_Delete(json);
     if (ret != ESP_OK) {
         httpd_resp_set_status(req, "500 Internal Server Error");
-        return httpd_resp_sendstr(req, "Create failed");
+        const char *err_msg = (ret == ESP_ERR_INVALID_ARG) ? "UAS ID already exists" : "Create failed";
+        return httpd_resp_sendstr(req, err_msg);
     }
     rid_manager_save_all();
     httpd_resp_set_status(req, "201 Created");
     char resp[32];
     snprintf(resp, sizeof(resp), "{\"id\":%u}", (unsigned)id);
+    httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, resp);
 }
 
@@ -133,21 +127,39 @@ esp_err_t instance_put_handler(httpd_req_t *req) {
         httpd_resp_set_status(req, "400 Bad Request");
         return httpd_resp_sendstr(req, "Invalid JSON");
     }
+
+    // 更新 standard（如果存在）
+    cJSON *std_item = cJSON_GetObjectItem(json, "standard");
+    if (std_item && cJSON_IsNumber(std_item)) {
+        rid_standard_t new_std = (rid_standard_t)std_item->valueint;
+        esp_err_t ret_std = rid_manager_update_standard(id, new_std);
+        if (ret_std != ESP_OK) {
+            cJSON_Delete(json);
+            httpd_resp_set_status(req, "500 Internal Server Error");
+            return httpd_resp_sendstr(req, "Failed to update standard");
+        }
+    }
+
+    // 获取当前配置
     rid_config_t cfg;
     if (rid_manager_get_config(id, &cfg) != ESP_OK) {
         cJSON_Delete(json);
         httpd_resp_set_status(req, "404 Not Found");
         return httpd_resp_sendstr(req, "Instance not found");
     }
+
+    // 更新其他字段
     cJSON *item;
     if ((item = cJSON_GetObjectItem(json, "uas_id"))) {
         strncpy(cfg.uas_id, item->valuestring, sizeof(cfg.uas_id) - 1);
+        cfg.uas_id[sizeof(cfg.uas_id) - 1] = '\0'; // 确保终止
     }
     if ((item = cJSON_GetObjectItem(json, "latitude"))) cfg.latitude = (float)item->valuedouble;
     if ((item = cJSON_GetObjectItem(json, "longitude"))) cfg.longitude = (float)item->valuedouble;
     if ((item = cJSON_GetObjectItem(json, "altitude_msl"))) cfg.altitude_msl = (float)item->valuedouble;
     if ((item = cJSON_GetObjectItem(json, "altitude_agl"))) cfg.altitude_agl = (float)item->valuedouble;
     if ((item = cJSON_GetObjectItem(json, "flight_mode"))) cfg.flight_mode = (uint8_t)item->valueint;
+
     esp_err_t ret = rid_manager_update_config(id, &cfg);
     cJSON_Delete(json);
     if (ret != ESP_OK) {
@@ -155,7 +167,8 @@ esp_err_t instance_put_handler(httpd_req_t *req) {
         return httpd_resp_sendstr(req, "Update failed");
     }
     rid_manager_save_all();
-    return httpd_resp_sendstr(req, "OK");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
 }
 
 // DELETE /api/instance?id=xxx

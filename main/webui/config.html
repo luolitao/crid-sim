@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-RID 模拟器 - 配置</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px}
+.container{max-width:1200px;margin:0 auto}
+h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
+h3{color:#aaa;margin:20px 0 10px;border-bottom:1px solid #333;padding-bottom:8px}
+.card{background:#16213e;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+.nav-links a{color:#0d6efd;text-decoration:none;margin-right:20px;font-weight:bold}
+.nav-links a:hover{text-decoration:underline}
+.instance-card{background:#0f3460;border-radius:8px;padding:16px;margin:12px 0;border-left:4px solid #e94560}
+.instance-card .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.instance-card input,select{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#fff;font-size:14px}
+.btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:0.2s}
+.btn-primary{background:#0d6efd;color:#fff}
+.btn-success{background:#198754;color:#fff}
+.btn-warning{background:#ffc107;color:#000}
+.btn-danger{background:#dc3545;color:#fff}
+.btn-sm{padding:4px 12px;font-size:0.85em}
+.actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.status-msg{font-size:0.9em;margin-left:12px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⚙️ 无人机配置</h1>
+  <div class="nav-links">
+    <a href="/">📊 状态</a>
+    <a href="/config.html">⚙️ 配置</a>
+    <a href="/ota.html">📦 OTA</a>
+  </div>
+
+  <div class="card">
+    <h3>🛸 无人机实例 <button id="addInstance" class="btn btn-success btn-sm" style="float:right">+ 添加</button></h3>
+    <div id="instancesContainer"></div>
+  </div>
+</div>
+
+<script>
+const api = async (method, path, body) => {
+  const res = await fetch(path, {
+    method,
+    headers: body ? {'Content-Type':'application/json'} : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  // 如果响应是 JSON 则解析，否则返回文本
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return await res.json();
+  } else {
+    return await res.text(); // 对于 "OK" 直接返回文本
+  }
+};
+
+async function loadInstances() {
+  try {
+    const data = await api('GET', '/api/instances');
+    const container = document.getElementById('instancesContainer');
+    if (!data.length) {
+      container.innerHTML = '<p style="color:#888">暂无实例，点击 “添加” 创建</p>';
+      return;
+    }
+    container.innerHTML = data.map(inst => `
+      <div class="instance-card" data-id="${inst.id}">
+        <h4>实例 #${inst.id} <span style="color:${inst.active?'#198754':'#dc3545'}">${inst.active?'🟢 运行中':'🔴 已停止'}</span></h4>
+        <div class="row">
+          <label>标准<select class="std-select">
+            <option value="0" ${inst.standard==0?'selected':''}>GB42590</option>
+            <option value="1" ${inst.standard==1?'selected':''}>GB46750</option>
+            <option value="2" ${inst.standard==2?'selected':''}>ASTM</option>
+          </select></label>
+          <label>UAS ID<input class="uas-id" value="${inst.uas_id}" maxlength="20"></label>
+          <label>纬度<input class="lat" type="number" step="0.000001" value="${inst.latitude}"></label>
+          <label>经度<input class="lon" type="number" step="0.000001" value="${inst.longitude}"></label>
+          <label>高度(MSL)<input class="alt" type="number" step="0.5" value="${inst.altitude_msl}"></label>
+          <label>飞行模式<select class="mode-select">
+            <option value="0" ${inst.flight_mode==0?'selected':''}>Circle</option>
+            <option value="1" ${inst.flight_mode==1?'selected':''}>PingPong</option>
+            <option value="2" ${inst.flight_mode==2?'selected':''}>S-Search</option>
+          </select></label>
+        </div>
+        <div class="actions">
+          <button class="btn btn-success btn-sm start-btn" ${inst.active?'disabled':''}>启动</button>
+          <button class="btn btn-warning btn-sm stop-btn" ${!inst.active?'disabled':''}>停止</button>
+          <button class="btn btn-primary btn-sm save-btn">保存</button>
+          <button class="btn btn-danger btn-sm delete-btn">删除</button>
+          <span class="status-msg"></span>
+        </div>
+      </div>
+    `).join('');
+
+    // 绑定事件（与之前相同）
+    // ... 事件绑定代码（从旧 index.html 复制即可）
+    // 为避免重复，此处略，可参考之前完整的 JS
+    document.querySelectorAll('.start-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.closest('.instance-card').dataset.id;
+        try {
+          await api('POST', `/api/instance/start?id=${id}`);
+          loadInstances();
+        } catch(e){ alert('启动失败'); }
+      };
+    });
+    document.querySelectorAll('.stop-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.closest('.instance-card').dataset.id;
+        try {
+          await api('POST', `/api/instance/stop?id=${id}`);
+          loadInstances();
+        } catch(e){ alert('停止失败'); }
+      };
+    });
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm('确认删除此实例？')) return;
+        const id = btn.closest('.instance-card').dataset.id;
+        try {
+          await api('DELETE', `/api/instance?id=${id}`);
+          loadInstances();
+        } catch(e){ alert('删除失败'); }
+      };
+    });
+    document.querySelectorAll('.save-btn').forEach(btn => {
+      btn.onclick = async function() {
+        const card = this.closest('.instance-card');
+        const id = card.dataset.id;
+        const msg = card.querySelector('.status-msg');
+        msg.textContent = '保存中...';
+        msg.style.color = '#ffc107';
+        try {
+          const data = {
+            uas_id: card.querySelector('.uas-id').value,
+            latitude: parseFloat(card.querySelector('.lat').value),
+            longitude: parseFloat(card.querySelector('.lon').value),
+            altitude_msl: parseFloat(card.querySelector('.alt').value),
+            altitude_agl: parseFloat(card.querySelector('.alt').value),
+            flight_mode: parseInt(card.querySelector('.mode-select').value),
+            standard: parseInt(card.querySelector('.std-select').value)  // 新增
+          };
+          const res = await fetch(`/api/instance?id=${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(data)
+          });
+          if (res.ok) {
+            msg.textContent = '✓ 已保存';
+            msg.style.color = 'green';
+            // 可选：刷新列表
+            setTimeout(() => { msg.textContent = ''; }, 2000);
+            loadInstances();
+          } else {
+            const err = await res.text();
+            msg.textContent = '✗ 失败: ' + err;
+          }
+        } catch(e) {
+          msg.textContent = '✗ 失败: ' + e.message;
+          msg.style.color = '#dc3545';
+          setTimeout(() => { msg.textContent = ''; }, 3000);
+        }
+      };
+    });
+  } catch(e) { 
+    document.getElementById('instancesContainer').innerHTML =
+      `<p style="color:#dc3545">加载失败: ${e.message}</p>`;/* ... */ }
+}
+
+document.getElementById('addInstance').onclick = async () => {
+  try {
+    await api('POST', '/api/instance', {
+      standard:0, uas_id:'ESP32-DRONE', latitude:23.14287, longitude:113.26026, altitude_msl:50, flight_mode:0
+    });
+    loadInstances();
+  } catch(e){ alert('添加失败'); }
+};
+
+loadInstances();
+</script>
+</body>
+</html>

@@ -24,6 +24,7 @@ static drone_instance_t *s_head = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
 static uint32_t s_next_id = 1;
 static TaskHandle_t s_dispatcher_task = NULL;
+static drone_instance_t *s_current_instance = NULL;  // 当前正在广播的实例
 
 // ==================== 内部辅助函数 ====================
 
@@ -63,6 +64,18 @@ esp_err_t rid_manager_create(rid_standard_t standard, const rid_config_t *init_c
 
     drone_instance_t *inst = calloc(1, sizeof(drone_instance_t));
     if (!inst) return ESP_ERR_NO_MEM;
+    // 检查 UAS ID 是否重复
+    lock();
+    drone_instance_t *cur = s_head;
+    while (cur) {
+        if (strncmp(cur->config.uas_id, init_config->uas_id, RID_UAS_ID_MAX_LEN) == 0) {
+            unlock();
+            return ESP_ERR_INVALID_ARG; // 或其他自定义错误
+        }
+        cur = cur->next;
+    }
+    unlock();
+    // 继续创建...
 
     inst->id = s_next_id++;
     inst->standard = standard;
@@ -103,10 +116,18 @@ esp_err_t rid_manager_start(uint32_t id) {
     lock();
     drone_instance_t *inst = find_instance_unlocked(id);
     if (!inst) { unlock(); return ESP_ERR_NOT_FOUND; }
-    if (inst->active) { unlock(); return ESP_OK; }
+    // 停止所有其他实例
+    drone_instance_t *cur = s_head;
+    while (cur) {
+        if (cur != inst && cur->active) {
+            cur->active = false;
+        }
+        cur = cur->next;
+    }
     inst->active = true;
+    s_current_instance = inst;
     unlock();
-    ESP_LOGI(TAG, "Started instance %u", id);
+    ESP_LOGI(TAG, "Started instance %u, stopped others", id);
     return ESP_OK;
 }
 
@@ -114,8 +135,10 @@ esp_err_t rid_manager_stop(uint32_t id) {
     lock();
     drone_instance_t *inst = find_instance_unlocked(id);
     if (!inst) { unlock(); return ESP_ERR_NOT_FOUND; }
-    if (!inst->active) { unlock(); return ESP_OK; }
     inst->active = false;
+    if (s_current_instance == inst) {
+        s_current_instance = NULL;
+    }
     unlock();
     ESP_LOGI(TAG, "Stopped instance %u", id);
     return ESP_OK;
@@ -196,8 +219,20 @@ void rid_manager_for_each(instance_callback_t cb, void *user_ctx) {
     unlock();
 }
 
-// ==================== NVS 持久化 ====================
+esp_err_t rid_manager_update_standard(uint32_t id, rid_standard_t standard) {
+    lock();
+    drone_instance_t *inst = find_instance_unlocked(id);
+    if (!inst) {
+        unlock();
+        return ESP_ERR_NOT_FOUND;
+    }
+    inst->standard = standard;
+    unlock();
+    ESP_LOGI(TAG, "Updated standard for instance %u to %d", id, standard);
+    return ESP_OK;
+}
 
+// ==================== NVS 持久化 ====================
 // 持久化结构
 typedef struct {
     uint32_t id;
@@ -213,7 +248,10 @@ typedef struct {
 esp_err_t rid_manager_save_all(void) {
     nvs_handle_t handle;
     esp_err_t err = nvs_open(INST_NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(err));
+        return err;
+    }
 
     lock();
     int count = 0;
@@ -225,6 +263,7 @@ esp_err_t rid_manager_save_all(void) {
         nvs_commit(handle);
         nvs_close(handle);
         unlock();
+        ESP_LOGI(TAG, "No instances to save, erased key");
         return ESP_OK;
     }
 
@@ -232,6 +271,7 @@ esp_err_t rid_manager_save_all(void) {
     if (!arr) {
         nvs_close(handle);
         unlock();
+        ESP_LOGE(TAG, "malloc failed");
         return ESP_ERR_NO_MEM;
     }
 
@@ -249,8 +289,16 @@ esp_err_t rid_manager_save_all(void) {
     unlock();
 
     err = nvs_set_blob(handle, INST_NVS_KEY, arr, count * sizeof(instance_persist_t));
-    if (err == ESP_OK) {
-        err = nvs_commit(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_set_blob failed: %s", esp_err_to_name(err));
+        free(arr);
+        nvs_close(handle);
+        return err;
+    }
+    err = nvs_commit(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_commit failed: %s", esp_err_to_name(err));
+    } else {
         ESP_LOGI(TAG, "Saved %d instances to NVS", count);
     }
     free(arr);
@@ -302,6 +350,7 @@ esp_err_t rid_manager_load_all(void) {
     rid_manager_clear_all();
 
     // 重建链表
+    uint32_t max_id = 0;
     for (int i = 0; i < count; i++) {
         instance_persist_t *p = &arr[i];
         drone_instance_t *inst = malloc(sizeof(drone_instance_t));
@@ -316,7 +365,9 @@ esp_err_t rid_manager_load_all(void) {
         inst->next = s_head;
         s_head = inst;
         unlock();
+        if (p->id > max_id) max_id = p->id;
     }
+    s_next_id = max_id + 1;
 
     free(arr);
     nvs_close(handle);
@@ -325,7 +376,7 @@ esp_err_t rid_manager_load_all(void) {
     lock();
     drone_instance_t *cur = s_head;
     while (cur) {
-        ESP_LOGI(TAG, "Loaded instance: id=%u, active=%d, standard=%d", 
+        ESP_LOGD(TAG, "Loaded instance: id=%u, active=%d, standard=%d", 
                  cur->id, cur->active, cur->standard);
         cur = cur->next;
     }
@@ -333,73 +384,80 @@ esp_err_t rid_manager_load_all(void) {
     return ESP_OK;
 }
 
-// ==================== 调度任务 ====================
+#include "freertos/queue.h"
+
+static QueueHandle_t s_ie_queue = NULL;
+#define IE_QUEUE_LEN 10
+
+typedef struct {
+    uint8_t payload[256];
+    size_t len;
+    uint8_t counter;
+} ie_update_msg_t;
+
+// 独立任务：从队列取数据并调用 rid_wifi_set_rid_data
+static void ie_updater_task(void *arg) {
+    ie_update_msg_t msg;
+    while (1) {
+        if (xQueueReceive(s_ie_queue, &msg, portMAX_DELAY) == pdTRUE) {
+            rid_wifi_set_rid_data(msg.payload, msg.len, msg.counter);
+        }
+    }
+}
 
 static void dispatcher_task(void *arg) {
     ESP_LOGI(TAG, "Dispatcher task started");
     TickType_t last_wake = xTaskGetTickCount();
-    uint32_t loop_cnt = 0;
     while (1) {
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1000));
-        loop_cnt ++;
-        ESP_LOGI(TAG, "Dispatcher loop %u", loop_cnt);
 
-        lock();        
-        drone_instance_t *cur = s_head;
-        while (cur) {
-            ESP_LOGD(TAG, "Instance %u: active=%d, standard=%d", cur->id, cur->active, cur->standard);
-            if (cur->active) {
-                // 计算位置（暂用全局）
-                double lat, lon;
-                float heading;
-                //rid_patrol_calculate_next(&lat, &lon, &heading);
-                rid_patrol_calculate_next_with_mode(cur->config.flight_mode, &lat, &lon, &heading);
-                rid_config_update_position(&cur->config, (float)lat, (float)lon,
-                                            cur->config.altitude_msl,
-                                            cur->config.altitude_agl,
-                                            cur->config.speed_horizontal,
-                                            cur->config.speed_vertical,
-                                            heading);
+        // 查找活跃实例
+        lock();
+        drone_instance_t *inst = s_current_instance;        
+        unlock();
+       
+        if (inst && inst->active) {
+            // 计算位置
+            double lat, lon;
+            float heading;
+            rid_patrol_calculate_next_with_mode(inst->config.flight_mode, &lat, &lon, &heading);
+            rid_config_update_position(&inst->config, (float)lat, (float)lon,
+                                        inst->config.altitude_msl,
+                                        inst->config.altitude_agl,
+                                        inst->config.speed_horizontal,
+                                        inst->config.speed_vertical,
+                                        heading);
 
-                
-                const rid_standard_meta_t *meta = rid_get_standard_meta(cur->standard);
-                if (meta == NULL) {
-                    ESP_LOGE(TAG, "Instance %u: unknown standard", cur->id);
-                    cur = cur->next;
-                    continue;
-                }
-                ESP_LOGI(TAG, "Instance %u building frame, standard=%d", cur->id, cur->standard);
-                
-                // 构建 RID payload（打包后的数据）
-                uint8_t payload[RID_MAX_PACK_MESSAGES * RID_SINGLE_MSG_SIZE + 3]; // 最大长度
+            const rid_standard_meta_t *meta = rid_get_standard_meta(inst->standard);
+            if (meta) {
+                uint8_t payload[256];
                 int payload_len = 0;
-                if (meta->use_gb46750_encoder) {
-                    // GB46750 直接编码
-                    payload_len = rid_build_gb46750_payload(&cur->config, payload, sizeof(payload));
+                if (meta->msg_count == 0) {
+                    payload_len = rid_build_gb46750_payload(&inst->config, payload, sizeof(payload));
                 } else {
-                    // ASTM / GB42590：使用打包函数
-                    payload_len = rid_pack_messages(payload, meta->pack_format, meta->builders, meta->msg_count, &cur->config);
+                    payload_len = rid_pack_messages(payload, meta, &inst->config);
                 }
                 if (payload_len > 0) {
-                    esp_err_t ret = rid_wifi_set_rid_data(payload, payload_len, cur->message_counter);
+                    esp_err_t ret = rid_wifi_set_rid_data(payload, payload_len, inst->message_counter);
                     if (ret == ESP_OK) {
-                        cur->message_counter++;
-                        ESP_LOGD(TAG, "Instance %u RID data updated", cur->id);
+                        inst->message_counter++;
+                        ESP_LOGD(TAG, "Instance %u RID data updated",inst->id);
                     } else {
-                        ESP_LOGE(TAG, "Instance %u set RID data failed: %s", cur->id, esp_err_to_name(ret));
+                        ESP_LOGE(TAG, "Instance %u set RID data failed: %s", inst->id, esp_err_to_name(ret));
                     }
-                } else {
-                    ESP_LOGE(TAG, "Instance %u payload build failed", cur->id);
                 }
             }
-            cur = cur->next;
         }
-        unlock();
     }
 }
 
+// 启动队列和更新任务
 void rid_manager_start_dispatcher(void) {
     if (s_dispatcher_task) return;
-    xTaskCreate(dispatcher_task, "rid_dispatch", 4096, NULL, 5, &s_dispatcher_task);
-    ESP_LOGI(TAG, "Dispatcher task created");
+    if (s_ie_queue == NULL) {
+        s_ie_queue = xQueueCreate(IE_QUEUE_LEN, sizeof(ie_update_msg_t));
+        xTaskCreate(ie_updater_task, "ie_updater", 2048, NULL, 1, NULL); // 最低优先级
+    }
+    xTaskCreate(dispatcher_task, "rid_dispatch", 4096, NULL, 2, &s_dispatcher_task);
+    ESP_LOGI(TAG, "Dispatcher and updater tasks created");
 }

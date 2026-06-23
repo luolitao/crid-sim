@@ -98,7 +98,7 @@ esp_err_t rid_nvs_init(void) {
 
 esp_err_t rid_nvs_load_config(rid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(rid_NVS_NAMESPACE, NVS_READONLY, &handle);
+    esp_err_t err = nvs_open(RID_NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
         cfg->init_lat = 23.14287;
         cfg->init_lon = 113.26026;
@@ -119,7 +119,7 @@ esp_err_t rid_nvs_load_config(rid_dynamic_config_t *cfg) {
 
 esp_err_t rid_nvs_save_config(const rid_dynamic_config_t *cfg) {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(rid_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    esp_err_t err = nvs_open(RID_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
     err = nvs_set_blob(handle, "config_blob", cfg, sizeof(rid_dynamic_config_t));
     if (err == ESP_OK) {

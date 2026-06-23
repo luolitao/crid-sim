@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-RID 模拟器 - OTA</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px}
+.container{max-width:800px;margin:0 auto}
+h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
+.card{background:#16213e;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+.nav-links a{color:#0d6efd;text-decoration:none;margin-right:20px;font-weight:bold}
+.nav-links a:hover{text-decoration:underline}
+.ota-upload{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.ota-upload input[type=file]{background:#222;padding:6px;border-radius:4px;color:#fff}
+.btn{padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+.btn-warning{background:#ffc107;color:#000}
+.status-msg{margin-top:12px;font-size:1em}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📦 固件升级 (OTA)</h1>
+  <div class="nav-links">
+    <a href="/">📊 状态</a>
+    <a href="/config.html">⚙️ 配置</a>
+    <a href="/ota.html">📦 OTA</a>
+  </div>
+
+  <div class="card">
+    <h3>上传固件</h3>
+    <div class="ota-upload">
+      <input type="file" id="otaFile" accept=".bin">
+      <button id="otaUpload" class="btn btn-warning">上传并升级</button>
+    </div>
+    <p id="otaStatus" class="status-msg"></p>
+  </div>
+</div>
+
+<script>
+document.getElementById('otaUpload').onclick = async () => {
+  const fileInput = document.getElementById('otaFile');
+  const file = fileInput.files[0];
+  if (!file) return alert('请选择固件文件');
+  const st = document.getElementById('otaStatus');
+  const btn = document.getElementById('otaUpload');
+  btn.disabled = true;
+  st.textContent = '上传中...';
+  st.style.color = '#ffc107';
+  try {
+    const res = await fetch('/ota', { method: 'POST', body: file });
+    const text = await res.text();
+    st.textContent = text;
+    st.style.color = res.ok ? '#198754' : '#dc3545';
+    if (res.ok) { /* 设备将重启 */ }
+  } catch(e) {
+    st.textContent = '错误: ' + e.message;
+    st.style.color = '#dc3545';
+  }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>

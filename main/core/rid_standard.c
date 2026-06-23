@@ -1,14 +1,14 @@
 #include "rid_standard.h"
 #include "rid_messages.h"
 
-// GB42590 构建器列表
+// GB42590 构建器
 static const msg_builder_t gb42590_builders[] = {
     rid_encode_basic_id,
     rid_encode_location,
     rid_encode_system
 };
 
-// ASTM 构建器列表
+// ASTM 构建器（含 Self-ID 和 Operator ID）
 static const msg_builder_t astm_builders[] = {
     rid_encode_basic_id,
     rid_encode_location,
@@ -17,28 +17,25 @@ static const msg_builder_t astm_builders[] = {
     rid_encode_operator_id
 };
 
-// GB46750 不使用构建器数组，msg_count = 0, builders = NULL
+// GB46750 不使用构建器
 const rid_standard_meta_t g_standard_meta[] = {
     {
         .standard = RID_STANDARD_GB42590,
-        .pack_format = PACK_FORMAT_GB42590,
+        .pack_version = 1,          // 0xF1
         .msg_count = 3,
-        .builders = gb42590_builders,
-        .use_gb46750_encoder = false
+        .builders = gb42590_builders
     },
     {
         .standard = RID_STANDARD_GB46750,
-        .pack_format = PACK_FORMAT_GB46750,
+        .pack_version = 0,          // 未使用
         .msg_count = 0,
-        .builders = NULL,
-        .use_gb46750_encoder = true
+        .builders = NULL
     },
     {
         .standard = RID_STANDARD_ASTM,
-        .pack_format = PACK_FORMAT_ASTM,
+        .pack_version = 1,          // 0xF1（实际与 GB42590 相同）
         .msg_count = 5,
-        .builders = astm_builders,
-        .use_gb46750_encoder = false
+        .builders = astm_builders
     }
 };
 

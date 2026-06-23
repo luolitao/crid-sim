@@ -38,7 +38,7 @@
 #define GB_FLAG_BYTE3_SPD_ACC       0x08    // 019 速度精度 (M)
 #define GB_FLAG_BYTE3_TIMESTAMP     0x04    // 020 时间戳 (M)
 #define GB_FLAG_BYTE3_TS_ACC        0x02    // 021 时间戳精度 (M)
-#define GB_FLAG_BYTE3_EXT           0x01    // 扩展标志位
+#define GB_FLAG_BYTE3_EXT           0x00    // 扩展标志位
 
 // ==================== 枚举定义[reference:9] ====================
 // 运行类别 (003)

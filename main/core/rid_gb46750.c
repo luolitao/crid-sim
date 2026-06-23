@@ -68,6 +68,7 @@ static void gb46750_calc_flags(gb46750_data_t *data) {
     f1 |= GB_FLAG_BYTE1_GCS_POS_TYPE;   // 005 遥控站位置类型
     f1 |= GB_FLAG_BYTE1_GCS_POS;        // 006 遥控站位置
     f1 |= GB_FLAG_BYTE1_GCS_ALT;        // 007 遥控站高度
+    f1 |= GB_FLAG_BYTE1_EXT;            // 扩展标志位
 
     // 字节1可选: 运行类别 (003)
     if (data->op_category != GB_OP_CATEGORY_UNDEFINED) {
@@ -79,6 +80,7 @@ static void gb46750_calc_flags(gb46750_data_t *data) {
     f2 |= GB_FLAG_BYTE2_TRACK;          // 009 航迹角
     f2 |= GB_FLAG_BYTE2_GROUND_SPEED;   // 010 地速
     f2 |= GB_FLAG_BYTE2_GEO_ALT;        // 013 大地高度
+    f2 |= GB_FLAG_BYTE2_EXT;            // 扩展标志位
 
     // 字节2可选: 相对高度 (011), 垂直速度 (012), 气压高度 (014)
     if (data->rel_altitude != 0.0f || data->rel_altitude > -1000.0f) {
@@ -99,6 +101,7 @@ static void gb46750_calc_flags(gb46750_data_t *data) {
     f3 |= GB_FLAG_BYTE3_SPD_ACC;        // 019 速度精度
     f3 |= GB_FLAG_BYTE3_TIMESTAMP;      // 020 时间戳
     f3 |= GB_FLAG_BYTE3_TS_ACC;         // 021 时间戳精度
+    f3 |= GB_FLAG_BYTE3_EXT;            // 扩展标志位
 
     data->flag_byte1 = f1;
     data->flag_byte2 = f2;
@@ -124,7 +127,10 @@ int gb46750_encode(const gb46750_data_t *data, uint8_t *out, size_t max_len) {
     // Byte 1: 版本 (0x20) + 保留位
     out[pos++] = GB_VERSION_BASE;                   // 0x20[reference:18]
 
-    // Byte 2-4: 数据标识 (3字节)
+    // Byte 2: 数据内容项的字节数
+    out[pos++] = max_len;
+
+    // Byte 3-5: 数据标识 (3字节)
     out[pos++] = local.flag_byte1;
     out[pos++] = local.flag_byte2;
     out[pos++] = local.flag_byte3;

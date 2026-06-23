@@ -48,15 +48,16 @@ typedef struct {
 extern rid_dynamic_config_t g_rid_config;
 extern SemaphoreHandle_t g_rid_config_mutex;
 
-#define rid_NVS_NAMESPACE "rid_cfg"
-#define rid_UAS_ID_MAX_LEN 20
-#define rid_SSID_MAX_LEN 32
+#define RID_NVS_NAMESPACE "rid_cfg"
+#define RID_UAS_ID_MAX_LEN 20
+#define RID_SSID_MAX_LEN 32
 #define DEFAULT_WIFI_CHANNEL 6
 
 // 完整配置结构体 (用于报文构建)
 typedef struct {
     uint8_t mac_address[6];
-    char uas_id[rid_UAS_ID_MAX_LEN + 1];
+    uint8_t standard;
+    char uas_id[RID_UAS_ID_MAX_LEN + 1];
     uint8_t id_type;
     uint8_t ua_type;
     float latitude;
@@ -70,14 +71,14 @@ typedef struct {
     float operator_lat;
     float operator_lon;
     float operator_alt;
-    char operator_id[rid_UAS_ID_MAX_LEN + 1];
-    char drone_name[rid_UAS_ID_MAX_LEN + 1];
+    char operator_id[RID_UAS_ID_MAX_LEN + 1];
+    char drone_name[RID_UAS_ID_MAX_LEN + 1];
     uint8_t operator_location_type;
     uint8_t classification_type;
     uint8_t category_eu;
     uint8_t class_eu;
     uint8_t height_type;
-    char ssid[rid_SSID_MAX_LEN + 1];
+    char ssid[RID_SSID_MAX_LEN + 1];
     uint8_t channel;
     uint8_t message_counter;
     uint8_t flight_mode;

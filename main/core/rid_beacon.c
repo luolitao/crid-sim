@@ -59,7 +59,9 @@ bool rid_build_beacon_frame(const rid_config_t *config,
     // ===== Vendor Specific IE =====
 #define VENDOR_HEADER_LEN 5  // OUI(3) + Type(1) + Counter(1)
 
-    if (meta->use_gb46750_encoder) {
+    if (meta->msg_count == 0) {
+        // GB46750：独立编码（msg_count == 0）
+        // ... GB46750 编码逻辑 ...
         ESP_LOGD(TAG, "Using GB46750 encoder");
         uint8_t gb_payload[128];
         int payload_len = rid_build_gb46750_payload(config, gb_payload, sizeof(gb_payload));
@@ -81,9 +83,10 @@ bool rid_build_beacon_frame(const rid_config_t *config,
         pos += payload_len;
         // ESP_LOGI(TAG, "GB46750 encoded, total len=%d, payload_len=%d", pos, payload_len);
     } else {
+        // ASTM / GB42590：使用打包函数
         ESP_LOGD(TAG, "Using packed messages (ASTM/GB42590)");
         uint8_t packed[RID_MAX_PACK_MESSAGES * RID_SINGLE_MSG_SIZE + 3];
-        int packed_len = rid_pack_messages(packed, meta->pack_format, meta->builders, meta->msg_count, config);
+        int packed_len = rid_pack_messages(packed, meta, config);
         if (packed_len < 0) {
             ESP_LOGE(TAG, "Pack messages failed");
             return false;

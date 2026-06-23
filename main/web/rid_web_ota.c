@@ -17,23 +17,25 @@
 #include "rid_patrol.h"
 #include "rid_api.h"
 #include "rid_auth.h"
-#include "rid_web_html.h"
+#include "rid_static.h"
+
+#define FIRMWARE_VERSION "v1.0.0-" __DATE__ " " __TIME__
 
 static const char *TAG = "RID_WEB_OTA";
 static httpd_handle_t s_server = NULL;
 static volatile bool s_ota_in_progress = false;
 
+// ================= 原有其他处理函数 ====================
 static void reboot_delay_task(void *arg) {
     vTaskDelay(pdMS_TO_TICKS(1500));
     esp_restart();
 }
 
-
-// ================= 原有其他处理函数 ====================
+// -------------------- 全局配置（兼容旧接口） --------------------
 static esp_err_t config_post_handler(httpd_req_t *req) {
     if (!validate_auth(req)) {
         httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"C-RID OTA\"");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"RID OTA\"");
         return httpd_resp_sendstr(req, "Unauthorized");
     }
     char buf[64];
@@ -66,10 +68,11 @@ static esp_err_t config_post_handler(httpd_req_t *req) {
     return httpd_resp_sendstr(req, resp);
 }
 
+// -------------------- 确认 OTA --------------------
 static esp_err_t confirm_ota_handler(httpd_req_t *req) {
     if (!validate_auth(req)) {
         httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"C-RID OTA\"");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"RID OTA\"");
         return httpd_resp_sendstr(req, "Unauthorized");
     }
     if (rid_ota_confirm() == ESP_OK) {
@@ -80,10 +83,11 @@ static esp_err_t confirm_ota_handler(httpd_req_t *req) {
     return httpd_resp_sendstr(req, "No pending OTA to confirm.");
 }
 
+// -------------------- OTA 处理 --------------------
 static esp_err_t ota_post_handler(httpd_req_t *req) {
     if (!validate_auth(req)) {
         httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"C-RID OTA\"");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"RID OTA\"");
         return httpd_resp_sendstr(req, "Unauthorized");
     }
     if (s_ota_in_progress) {
@@ -132,45 +136,79 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+// -------------------- 系统信息 API --------------------
+static esp_err_t sysinfo_get_handler(httpd_req_t *req) {
+    rid_sys_info_t info;
+    rid_get_sys_info(&info);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "Chip", info.chip_model);
+    cJSON_AddStringToObject(root, "Flash", info.flash_size);
+    cJSON_AddStringToObject(root, "MAC", info.mac_addr);
+    cJSON_AddNumberToObject(root, "Uptime (s)", info.uptime_sec);
+    cJSON_AddStringToObject(root, "System Time", info.sys_time);
+    cJSON_AddNumberToObject(root, "Free Heap", info.free_heap);
+    cJSON_AddStringToObject(root, "Partition", info.partition_name);
+    char version[32];
+    snprintf(version, sizeof(version), "v1.0.0-%s %s", __DATE__, __TIME__);
+    cJSON_AddStringToObject(root, "Firmware", version);
+    char *json = cJSON_Print(root);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t ret = httpd_resp_sendstr(req, json);
+    free(json);
+    return ret;
+}
+
+
 // ==================== 初始化 ====================
+// -------------------- 路由注册 --------------------
 void rid_web_ota_init(void) {
-    rid_ota_auto_confirm();
     if (s_server != NULL) return;
-    rid_time_sync_init();
-
+    
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 4096;
-    config.server_port = 80;
-    config.max_uri_handlers = 10;
-    config.recv_wait_timeout = 60;
-    config.send_wait_timeout = 60;
-
-    if (httpd_start(&s_server, &config) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start HTTP server");
+    config.max_uri_handlers = 20;
+    esp_err_t ret = httpd_start(&s_server, &config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(ret));
         return;
+    } else {
+        ESP_LOGI(TAG, "HTTP server started successfully");
     }
 
-    httpd_uri_t root_uri = { .uri = "/", .method = HTTP_GET, .handler = send_root_html };
-    httpd_uri_t confirm_uri = { .uri = "/confirm_ota", .method = HTTP_GET, .handler = confirm_ota_handler };
-    httpd_uri_t config_uri = { .uri = "/config", .method = HTTP_POST, .handler = config_post_handler };
-    httpd_uri_t ota_uri = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post_handler };
-    httpd_uri_t instances_get = { .uri = "/api/instances", .method = HTTP_GET, .handler = instances_get_handler };
-    httpd_uri_t instance_post = { .uri = "/api/instance", .method = HTTP_POST, .handler = instance_post_handler };
-    httpd_uri_t instance_put = { .uri = "/api/instance", .method = HTTP_PUT, .handler = instance_put_handler };
-    httpd_uri_t instance_delete = { .uri = "/api/instance", .method = HTTP_DELETE, .handler = instance_delete_handler };
-    httpd_uri_t instance_start = { .uri = "/api/instance/start", .method = HTTP_POST, .handler = instance_start_handler };
-    httpd_uri_t instance_stop = { .uri = "/api/instance/stop", .method = HTTP_POST, .handler = instance_stop_handler };
+    // 静态页面（首页、配置页、OTA页）
+    httpd_uri_t root = { .uri = "/", .method = HTTP_GET, .handler = serve_index_html };
+    httpd_uri_t config_page = { .uri = "/config.html", .method = HTTP_GET, .handler = serve_config_html };
+    httpd_uri_t ota_page = { .uri = "/ota.html", .method = HTTP_GET, .handler = serve_ota_html };
+    httpd_register_uri_handler(s_server, &root);
+    httpd_register_uri_handler(s_server, &config_page);
+    httpd_register_uri_handler(s_server, &ota_page);
 
-    httpd_register_uri_handler(s_server, &root_uri);
-    httpd_register_uri_handler(s_server, &confirm_uri);
-    httpd_register_uri_handler(s_server, &config_uri);
-    httpd_register_uri_handler(s_server, &ota_uri);
-    httpd_register_uri_handler(s_server, &instances_get);
-    httpd_register_uri_handler(s_server, &instance_post);
-    httpd_register_uri_handler(s_server, &instance_put);
-    httpd_register_uri_handler(s_server, &instance_delete);
-    httpd_register_uri_handler(s_server, &instance_start);
-    httpd_register_uri_handler(s_server, &instance_stop);
+    // ---------- API 路由（实例管理） ----------
+    httpd_uri_t api_instances = { .uri = "/api/instances", .method = HTTP_GET, .handler = instances_get_handler };
+    httpd_uri_t api_instance_post = { .uri = "/api/instance", .method = HTTP_POST, .handler = instance_post_handler };
+    httpd_uri_t api_instance_put = { .uri = "/api/instance", .method = HTTP_PUT, .handler = instance_put_handler };
+    httpd_uri_t api_instance_delete = { .uri = "/api/instance", .method = HTTP_DELETE, .handler = instance_delete_handler };
+    httpd_uri_t api_instance_start = { .uri = "/api/instance/start", .method = HTTP_POST, .handler = instance_start_handler };
+    httpd_uri_t api_instance_stop = { .uri = "/api/instance/stop", .method = HTTP_POST, .handler = instance_stop_handler };
+    httpd_uri_t api_sysinfo = { .uri = "/api/sysinfo", .method = HTTP_GET, .handler = sysinfo_get_handler };
+
+    httpd_register_uri_handler(s_server, &api_instances);
+    httpd_register_uri_handler(s_server, &api_instance_post);
+    httpd_register_uri_handler(s_server, &api_instance_put);
+    httpd_register_uri_handler(s_server, &api_instance_delete);
+    httpd_register_uri_handler(s_server, &api_instance_start);
+    httpd_register_uri_handler(s_server, &api_instance_stop);
+    httpd_register_uri_handler(s_server, &api_sysinfo);
+
+    // ---------- OTA 与配置路由 ----------
+    httpd_uri_t ota = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post_handler };
+    httpd_uri_t confirm = { .uri = "/confirm_ota", .method = HTTP_GET, .handler = confirm_ota_handler };
+    httpd_uri_t ota_config = { .uri = "/config", .method = HTTP_POST, .handler = config_post_handler };
+
+    httpd_register_uri_handler(s_server, &ota);
+    httpd_register_uri_handler(s_server, &confirm);
+    httpd_register_uri_handler(s_server, &ota_config);
 
     ESP_LOGI(TAG, "Web server started. Open http://192.168.4.1/ in your browser");
 }
+

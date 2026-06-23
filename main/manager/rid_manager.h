@@ -77,6 +77,14 @@ bool rid_manager_is_active(uint32_t id);
  */
 rid_standard_t rid_manager_get_standard(uint32_t id);
 
+/**
+ * @brief 更新实例的标准
+ * @param id 实例 ID
+ * @param standard 新的标准
+ * @return ESP_OK 成功，ESP_ERR_NOT_FOUND 实例不存在
+ */
+esp_err_t rid_manager_update_standard(uint32_t id, rid_standard_t standard);
+
 // ==================== NVS 持久化 ====================
 
 /**

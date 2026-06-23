@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-RID 模拟器 - 状态</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px}
+.container{max-width:1200px;margin:0 auto}
+h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
+h3{color:#aaa;margin:20px 0 10px;border-bottom:1px solid #333;padding-bottom:8px}
+.card{background:#16213e;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.info-grid div{padding:8px 0;border-bottom:1px solid #2a2a4a}
+.info-grid label{color:#888;font-size:0.85em}
+.info-grid span{color:#eee;font-weight:500}
+.instance-card{background:#0f3460;border-radius:8px;padding:12px;margin:8px 0;border-left:4px solid #e94560;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center}
+.instance-card .info{display:flex;flex-wrap:wrap;gap:12px;font-size:0.9em}
+.instance-card .info span{margin-right:12px}
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.8em;font-weight:bold}
+.badge-active{background:#198754;color:#fff}
+.badge-stopped{background:#dc3545;color:#fff}
+.nav-links a{color:#0d6efd;text-decoration:none;margin-right:20px;font-weight:bold}
+.nav-links a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🚁 C-RID 模拟器</h1>
+  <div class="nav-links">
+    <a href="/">📊 状态</a>
+    <a href="/config.html">⚙️ 配置</a>
+    <a href="/ota.html">📦 OTA</a>
+  </div>
+
+  <div class="card">
+    <h3>📊 系统信息</h3>
+    <div class="info-grid" id="sysInfo"></div>
+  </div>
+
+  <div class="card">
+    <h3>🛸 无人机状态</h3>
+    <div id="instancesStatus"></div>
+  </div>
+</div>
+
+<script>
+const api = (method, path) => fetch(path, {method}).then(r => r.json());
+
+async function loadSysInfo() {
+  try {
+    const data = await api('GET', '/api/sysinfo');
+    const container = document.getElementById('sysInfo');
+    container.innerHTML = Object.entries(data).map(([k,v]) =>
+      `<div><label>${k}</label><span>${v}</span></div>`
+    ).join('');
+  } catch(e){ console.error(e); }
+}
+
+async function loadInstancesStatus() {
+  try {
+    const data = await api('GET', '/api/instances');
+    const container = document.getElementById('instancesStatus');
+    if (!data.length) {
+      container.innerHTML = '<p style="color:#888">暂无实例</p>';
+      return;
+    }
+    container.innerHTML = data.map(inst => `
+      <div class="instance-card">
+        <div class="info">
+          <span><strong>#${inst.id}</strong></span>
+          <span>标准: ${['GB42590','GB46750','ASTM'][inst.standard]}</span>
+          <span>位置: ${inst.latitude.toFixed(6)}, ${inst.longitude.toFixed(6)}</span>
+          <span>高度: ${inst.altitude_msl.toFixed(1)}m</span>
+          <span>速度: ${inst.speed_horizontal.toFixed(1)}m/s</span>
+          <span>航向: ${inst.heading.toFixed(1)}°</span>
+        </div>
+        <div>
+          <span class="badge ${inst.active ? 'badge-active' : 'badge-stopped'}">${inst.active ? '运行中' : '已停止'}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){ console.error(e); }
+}
+
+// 每2秒刷新
+loadSysInfo();
+loadInstancesStatus();
+setInterval(loadInstancesStatus, 2000);
+</script>
+</body>
+</html>

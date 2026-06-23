@@ -69,10 +69,15 @@ void rid_encode_self_id(const rid_config_t *config, uint8_t *out);
 void rid_encode_operator_id(const rid_config_t *config, uint8_t *out);
 void rid_encode_auth(const rid_config_t *config, uint8_t *out);
 
-// 打包函数（支持不同头部格式）
-int rid_pack_messages(uint8_t *out, pack_format_t format,
-                      const msg_builder_t builders[], uint8_t count,
-                      const rid_config_t *config);
+
+/**
+ * @brief 根据标准元数据打包消息
+ * @param out 输出缓冲区
+ * @param meta 标准元数据
+ * @param config 配置
+ * @return 打包后的长度（>0 表示成功），-1 表示失败
+ */
+int rid_pack_messages(uint8_t *out, const rid_standard_meta_t *meta, const rid_config_t *config);
 
 // GB46750 专用函数
 int rid_build_gb46750_payload(const rid_config_t *config, uint8_t *out, size_t max_len);

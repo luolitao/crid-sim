@@ -119,35 +119,29 @@ void rid_encode_auth(const rid_config_t *config, uint8_t *out) {
     // 其余为0
 }
 
-// ==================== 打包函数实现 ====================
-int rid_pack_messages(uint8_t *out, pack_format_t format,
-                      const msg_builder_t builders[], uint8_t count,
-                      const rid_config_t *config) {
-    if (!out || !builders || count == 0) {
-        ESP_LOGE(TAG, "Invalid pack parameters");
+int rid_pack_messages(uint8_t *out, const rid_standard_meta_t *meta, const rid_config_t *config) {
+    if (!out || !meta || !config) return -1;
+    if (meta->msg_count == 0 || meta->builders == NULL) {
+        ESP_LOGE(TAG, "Invalid meta for packing");
         return -1;
     }
-    // ESP_LOGI(TAG, "Packing %d messages, format=%d", count, format);
+
     uint8_t temp[RID_MAX_PACK_MESSAGES][RID_SINGLE_MSG_SIZE];
     size_t pos = 0;
-    if (format == PACK_FORMAT_ASTM) {
-        out[pos++] = (RID_MSG_PACK << 4) | RID_PROTOCOL_VERSION; // 0xF1
-        out[pos++] = count;
-    } else if (format == PACK_FORMAT_GB42590) {
-        out[pos++] = 0xF1;
-        out[pos++] = RID_SINGLE_MSG_SIZE;
-        out[pos++] = count;
-    } else {
-        ESP_LOGE(TAG, "Unsupported format");
-        return -1;
-    }
-    for (int i = 0; i < count; i++) {
-        builders[i](config, temp[i]);
+
+    // 头部：版本(低4位) + 0x19 + msg_count
+    uint8_t version_byte = 0xF0 | (meta->pack_version & 0x0F); // 高4位固定为0xF
+    out[pos++] = version_byte;
+    out[pos++] = RID_SINGLE_MSG_SIZE;   // 0x19
+    out[pos++] = meta->msg_count;
+
+    // 编码每个单消息
+    for (uint8_t i = 0; i < meta->msg_count; i++) {
+        meta->builders[i](config, temp[i]);
         memcpy(out + pos, temp[i], RID_SINGLE_MSG_SIZE);
         pos += RID_SINGLE_MSG_SIZE;
     }
-    ESP_LOGD(TAG, "Packed %d bytes, header type %d", pos, format);
-    // ESP_LOG_BUFFER_HEX(TAG, out, pos > 16 ? 16 : pos);
+
     return (int)pos;
 }
 
