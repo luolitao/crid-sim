@@ -16,24 +16,37 @@
 
 static const char *TAG = "RID_MAIN";
 
+// 设置 MAC 地址（自动适配）
+static void init_mac_address(void) {
+    uint8_t mac[6];
+    esp_err_t ret = esp_efuse_mac_get_default(mac);
+    if (ret == ESP_OK) {
+        // EFUSE MAC 有效，使用板载 MAC
+        esp_base_mac_addr_set(mac);
+        ESP_LOGI(TAG, "Using onboard MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    } else {
+        // EFUSE MAC 无效（CRC 错误），使用自定义 MAC
+        uint8_t custom_mac[6] = {0x24, 0x0A, 0xC4, 0x00, 0x00, 0x01};
+        esp_base_mac_addr_set(custom_mac);
+        ESP_LOGW(TAG, "EFUSE MAC CRC error, using custom MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 custom_mac[0], custom_mac[1], custom_mac[2],
+                 custom_mac[3], custom_mac[4], custom_mac[5]);
+    }
+}
+
 void app_main(void) {
     ESP_LOGI(TAG, "=== ESP32 Multi-Standard Remote ID Simulator ===");
 
-    // 1. 设置自定义 MAC（如果 EFUSE 损坏）
-    uint8_t custom_mac[6] = {0x24, 0x0A, 0xC4, 0x12, 0x34, 0x56};
-    esp_base_mac_addr_set(custom_mac);
-    ESP_LOGI(TAG, "Custom MAC set to: %02X:%02X:%02X:%02X:%02X:%02X",
-             custom_mac[0], custom_mac[1], custom_mac[2],
-             custom_mac[3], custom_mac[4], custom_mac[5]);
+    init_mac_address();
 
-    // 2. 初始化 NVS
     esp_err_t ret = rid_nvs_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "NVS Init Failed: %s", esp_err_to_name(ret));
         return;
     }
 
-    // 2.1 预先创建实例 NVS 命名空间（确保可用）
+    // 预打开实例 NVS 命名空间（确保可用）
     nvs_handle_t handle;
     ret = nvs_open("rid_inst", NVS_READWRITE, &handle);
     if (ret == ESP_OK) {
@@ -43,20 +56,17 @@ void app_main(void) {
         ESP_LOGW(TAG, "nvs_open rid_inst: %s, will retry later", esp_err_to_name(ret));
     }
 
-    // 3. 加载动态配置
     ret = rid_nvs_load_config(&g_rid_config);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to load config, using defaults");
     }
 
-    // 4. 初始化实例管理器
     rid_manager_init();
 
-    // 5. 尝试加载实例
     ret = rid_manager_load_all();
-    if (ret == ESP_ERR_NOT_FOUND || ret != ESP_OK) {
+    if (ret != ESP_OK) {
+        // 没有存储的实例，创建默认
         ESP_LOGW(TAG, "No instances stored, creating default");
-
         rid_config_t default_config;
         rid_config_init_default(&default_config);
         default_config.latitude = (float)g_rid_config.init_lat;
@@ -65,37 +75,39 @@ void app_main(void) {
         default_config.patrol_speed = g_rid_config.speed;
 
         uint32_t id;
-        rid_manager_create(RID_STANDARD_GB42590, &default_config, &id);
-        rid_manager_start(id);
-        ret = rid_manager_save_all();
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to save initial instance: %s", esp_err_to_name(ret));
+        ret = rid_manager_create(RID_STANDARD_GB42590, &default_config, &id);
+        if (ret == ESP_OK) {
+            rid_manager_start(id);
+            ret = rid_manager_save_all();
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Save failed: %s", esp_err_to_name(ret));
+            } else {
+                ESP_LOGI(TAG, "Default instance saved");
+            }
         } else {
-            ESP_LOGI(TAG, "Initial instance created and saved");
+            ESP_LOGE(TAG, "Create instance failed: %s", esp_err_to_name(ret));
         }
-    } else if (ret == ESP_OK) {
+    } else {
         ESP_LOGI(TAG, "Instances loaded successfully");
-        // 启动 active 实例
+        // 查找第一个 active 实例并启动（实际上启动函数会停止其他）
         drone_instance_t *inst = rid_manager_get_first();
         while (inst) {
             if (inst->active) {
-                rid_manager_start(inst->id);  // 内部会设置 s_current_instance
+                rid_manager_start(inst->id);
                 break;
             }
             inst = inst->next;
         }
         if (!inst) {
-            // 没有 active 实例，默认启动第一个
+            // 如果没有 active 实例，启动第一个
             inst = rid_manager_get_first();
             if (inst) {
                 rid_manager_start(inst->id);
             }
         }
-    } else {
-        ESP_LOGE(TAG, "rid_manager_load_all returned error: %s", esp_err_to_name(ret));
     }
 
-    // 6. 初始化网络和 Wi-Fi
+    // 初始化网络和 Wi-Fi
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
@@ -105,7 +117,6 @@ void app_main(void) {
         return;
     }
 
-    // 7. 启动 Web OTA 和调度器
     rid_web_ota_init();
     rid_ota_auto_confirm();
     rid_manager_start_dispatcher();

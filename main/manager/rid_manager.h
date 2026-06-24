@@ -3,19 +3,23 @@
 
 #include "rid_config.h"
 #include "rid_standard.h"
+#include "rid_patrol.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
 
 // 无人机实例结构（公开定义）
+// 可以在 drone_instance_t 中添加 patrol_params 字段
 typedef struct drone_instance {
     uint32_t id;
     rid_standard_t standard;
     rid_config_t config;
     uint8_t message_counter;
     bool active;
+    patrol_params_t patrol_params;   // 新增：轨迹参数
     struct drone_instance *next;
 } drone_instance_t;
+
 
 // ==================== 管理 API ====================
 

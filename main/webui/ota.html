@@ -7,16 +7,27 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px}
-.container{max-width:800px;margin:0 auto}
+.container{max-width:1200px;margin:0 auto}
 h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
+h3{color:#aaa;margin:20px 0 10px;border-bottom:1px solid #333;padding-bottom:8px}
 .card{background:#16213e;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
 .nav-links a{color:#0d6efd;text-decoration:none;margin-right:20px;font-weight:bold}
 .nav-links a:hover{text-decoration:underline}
-.ota-upload{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.ota-upload input[type=file]{background:#222;padding:6px;border-radius:4px;color:#fff}
-.btn{padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+.instance-card{background:#0f3460;border-radius:8px;padding:16px;margin:12px 0;border-left:4px solid #e94560}
+.instance-card .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.instance-card input,select{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#fff;font-size:14px}
+.btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:0.2s}
+.btn-primary{background:#0d6efd;color:#fff}
+.btn-success{background:#198754;color:#fff}
 .btn-warning{background:#ffc107;color:#000}
-.status-msg{margin-top:12px;font-size:1em}
+.btn-danger{background:#dc3545;color:#fff}
+.btn-sm{padding:4px 12px;font-size:0.85em}
+.actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.status-msg{font-size:0.9em;margin-left:12px}
+/* ... 已有样式 ... */
+.info-table td { padding: 4px 12px; }
+.actions { margin-top: 20px; }
+.actions button { margin-right: 10px; }
 </style>
 </head>
 <body>
@@ -29,37 +40,136 @@ h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
   </div>
 
   <div class="card">
-    <h3>上传固件</h3>
+    <h3>📋 分区信息</h3>
+    <div id="otaInfo" class="info-table"></div>
+  </div>
+
+  <div class="card">
+    <h3>📤 上传新固件</h3>
     <div class="ota-upload">
       <input type="file" id="otaFile" accept=".bin">
-      <button id="otaUpload" class="btn btn-warning">上传并升级</button>
+      <button id="otaUpload" class="btn btn-warning">上传并保存</button>
+      <span id="otaStatus" class="status-msg"></span>
     </div>
-    <p id="otaStatus" class="status-msg"></p>
+    <div id="uploadResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card actions">
+    <button id="otaSwitch" class="btn btn-primary">切换至上传的固件</button>
+    <button id="otaReboot" class="btn btn-danger">重启设备</button>
+    <span id="actionStatus" class="status-msg"></span>
   </div>
 </div>
 
 <script>
+// 获取并显示 OTA 信息
+async function loadOtaInfo() {
+  try {
+    const res = await fetch('/api/ota/info');
+    if (!res.ok) throw new Error('Failed to fetch');
+    const data = await res.json();
+    const container = document.getElementById('otaInfo');
+    container.innerHTML = `
+      <table>
+        <tr><td>当前运行分区</td><td><strong>${data.running_partition}</strong></td></tr>
+        <tr><td>固件版本</td><td><strong>${data.running_version}</strong></td></tr>
+        <tr><td>编译时间</td><td>${data.running_build_time}</td></tr>
+        <tr><td>下一个可用分区</td><td>${data.next_partition}</td></tr>
+        <tr><td>已上传固件分区</td><td>${data.uploaded_partition || '无'}</td></tr>
+        <tr><td>已上传固件版本</td><td>${data.uploaded_version || '无'}</td></tr>
+        <tr><td>已上传固件编译时间</td><td>${data.uploaded_build_time || '无'}</td></tr>
+        <tr><td>已上传固件大小</td><td>${data.uploaded_size ? (data.uploaded_size/1024).toFixed(1)+' KB' : '-'}</td></tr>
+      </table>
+    `;
+  } catch(e) {
+    document.getElementById('otaInfo').innerHTML = '<span style="color:#dc3545">加载信息失败</span>';
+  }
+}
+
+// 上传固件
 document.getElementById('otaUpload').onclick = async () => {
   const fileInput = document.getElementById('otaFile');
   const file = fileInput.files[0];
   if (!file) return alert('请选择固件文件');
   const st = document.getElementById('otaStatus');
   const btn = document.getElementById('otaUpload');
+  const resultDiv = document.getElementById('uploadResult');
   btn.disabled = true;
   st.textContent = '上传中...';
   st.style.color = '#ffc107';
   try {
     const res = await fetch('/ota', { method: 'POST', body: file });
     const text = await res.text();
-    st.textContent = text;
-    st.style.color = res.ok ? '#198754' : '#dc3545';
-    if (res.ok) { /* 设备将重启 */ }
+    let json;
+    try { json = JSON.parse(text); } catch(e) { json = { status: text }; }
+    if (res.ok) {
+      st.textContent = '✅ 上传成功';
+      st.style.color = '#198754';
+      resultDiv.innerHTML = `
+        <p>分区: ${json.partition}</p>
+        <p>版本: ${json.version}</p>
+        <p>大小: ${(json.size/1024).toFixed(1)} KB</p>
+        <p>状态: ${json.status}</p>
+      `;
+      loadOtaInfo();
+    } else {
+      st.textContent = '❌ 失败: ' + (json.status || '未知错误');
+      st.style.color = '#dc3545';
+    }
   } catch(e) {
     st.textContent = '错误: ' + e.message;
     st.style.color = '#dc3545';
   }
   btn.disabled = false;
 };
+
+// 切换启动分区
+document.getElementById('otaSwitch').onclick = async () => {
+  const st = document.getElementById('actionStatus');
+  st.textContent = '切换中...';
+  st.style.color = '#ffc107';
+  try {
+    // 获取上传的分区名
+    const info = await fetch('/api/ota/info').then(r => r.json());
+    if (!info.uploaded_partition) {
+      st.textContent = '❌ 没有已上传的固件';
+      st.style.color = '#dc3545';
+      return;
+    }
+    const res = await fetch('/api/ota/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partition: info.uploaded_partition })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    st.textContent = '✅ 已切换，下次启动将运行新固件';
+    st.style.color = '#198754';
+    loadOtaInfo();
+  } catch(e) {
+    st.textContent = '❌ 切换失败: ' + e.message;
+    st.style.color = '#dc3545';
+  }
+};
+
+// 重启
+document.getElementById('otaReboot').onclick = async () => {
+  if (!confirm('确认重启设备？')) return;
+  const st = document.getElementById('actionStatus');
+  st.textContent = '正在重启...';
+  st.style.color = '#ffc107';
+  try {
+    await fetch('/api/ota/reboot', { method: 'POST' });
+    // 设备将重启，无法收到响应
+    st.textContent = '设备正在重启...';
+  } catch(e) {
+    // 连接断开是预期的
+    st.textContent = '设备已重启';
+    st.style.color = '#198754';
+  }
+};
+
+// 初始加载
+loadOtaInfo();
 </script>
 </body>
 </html>

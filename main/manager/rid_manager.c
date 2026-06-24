@@ -7,27 +7,38 @@
 #include "rid_messages.h"
 #include "rid_gb46750.h"
 
-
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <string.h>
 #include <stdlib.h>
 
+#define INST_NVS_NAMESPACE "rid_inst"
+#define INST_NVS_KEY "inst_list"
+
 static const char *TAG = "RID_MGR";
 
-// 链表头
-static drone_instance_t *s_head = NULL;
 static SemaphoreHandle_t s_mutex = NULL;
 static uint32_t s_next_id = 1;
 static TaskHandle_t s_dispatcher_task = NULL;
+// 链表头
+static drone_instance_t *s_head = NULL;
 static drone_instance_t *s_current_instance = NULL;  // 当前正在广播的实例
 
-// ==================== 内部辅助函数 ====================
+// 持久化结构
+typedef struct {
+    uint32_t id;
+    rid_standard_t standard;
+    bool active;
+    uint8_t message_counter;
+    rid_config_t config;
+} instance_persist_t;
 
+// ==================== 内部辅助函数 ====================
 static void lock(void) {
     if (s_mutex) xSemaphoreTake(s_mutex, portMAX_DELAY);
 }
@@ -62,10 +73,12 @@ esp_err_t rid_manager_create(rid_standard_t standard, const rid_config_t *init_c
     if (!init_config) return ESP_ERR_INVALID_ARG;
     if (rid_manager_init() != ESP_OK) return ESP_ERR_NO_MEM;
 
+
     drone_instance_t *inst = calloc(1, sizeof(drone_instance_t));
     if (!inst) return ESP_ERR_NO_MEM;
     // 检查 UAS ID 是否重复
     lock();
+    
     drone_instance_t *cur = s_head;
     while (cur) {
         if (strncmp(cur->config.uas_id, init_config->uas_id, RID_UAS_ID_MAX_LEN) == 0) {
@@ -87,7 +100,8 @@ esp_err_t rid_manager_create(rid_standard_t standard, const rid_config_t *init_c
     inst->next = s_head;
     s_head = inst;
     unlock();
-
+    // 从 config 生成 patrol_params
+    rid_patrol_params_from_mode(init_config->flight_mode, init_config, &inst->patrol_params);
     if (out_id) *out_id = inst->id;
     ESP_LOGD(TAG, "Created instance ID=%u, standard=%d", inst->id, standard);
     return ESP_OK;
@@ -150,8 +164,10 @@ esp_err_t rid_manager_update_config(uint32_t id, const rid_config_t *new_config)
     drone_instance_t *inst = find_instance_unlocked(id);
     if (!inst) { unlock(); return ESP_ERR_NOT_FOUND; }
     memcpy(&inst->config, new_config, sizeof(rid_config_t));
+    // 更新轨迹参数
+    rid_patrol_params_from_mode(new_config->flight_mode, new_config, &inst->patrol_params);
     unlock();
-    ESP_LOGI(TAG, "Updated config for instance %u", id);
+    ESP_LOGI(TAG, "Updated config and patrol params for instance %u", id);
     return ESP_OK;
 }
 
@@ -232,44 +248,21 @@ esp_err_t rid_manager_update_standard(uint32_t id, rid_standard_t standard) {
     return ESP_OK;
 }
 
+
 // ==================== NVS 持久化 ====================
-// 持久化结构
-typedef struct {
-    uint32_t id;
-    rid_standard_t standard;
-    bool active;
-    uint8_t message_counter;
-    rid_config_t config;
-} instance_persist_t;
-
-#define INST_NVS_NAMESPACE "rid_inst"
-#define INST_NVS_KEY "inst_list"
-
 esp_err_t rid_manager_save_all(void) {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(INST_NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
     lock();
+    if (s_head == NULL) {
+        unlock();
+        ESP_LOGI(TAG, "No instances to save");
+        return ESP_OK;
+    }
     int count = 0;
     drone_instance_t *cur = s_head;
     while (cur) { count++; cur = cur->next; }
 
-    if (count == 0) {
-        nvs_erase_key(handle, INST_NVS_KEY);
-        nvs_commit(handle);
-        nvs_close(handle);
-        unlock();
-        ESP_LOGI(TAG, "No instances to save, erased key");
-        return ESP_OK;
-    }
-
     instance_persist_t *arr = malloc(count * sizeof(instance_persist_t));
     if (!arr) {
-        nvs_close(handle);
         unlock();
         ESP_LOGE(TAG, "malloc failed");
         return ESP_ERR_NO_MEM;
@@ -277,7 +270,7 @@ esp_err_t rid_manager_save_all(void) {
 
     cur = s_head;
     int idx = 0;
-    while (cur) {
+    while (cur && idx < count) {
         arr[idx].id = cur->id;
         arr[idx].standard = cur->standard;
         arr[idx].active = cur->active;
@@ -288,18 +281,24 @@ esp_err_t rid_manager_save_all(void) {
     }
     unlock();
 
-    err = nvs_set_blob(handle, INST_NVS_KEY, arr, count * sizeof(instance_persist_t));
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_set_blob failed: %s", esp_err_to_name(err));
+    if (idx != count) {
+        ESP_LOGE(TAG, "Instance count mismatch");
         free(arr);
-        nvs_close(handle);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(INST_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        free(arr);
         return err;
     }
-    err = nvs_commit(handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_commit failed: %s", esp_err_to_name(err));
+    err = nvs_set_blob(handle, INST_NVS_KEY, arr, count * sizeof(instance_persist_t));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+        ESP_LOGI(TAG, "Saved %d instances", count);
     } else {
-        ESP_LOGI(TAG, "Saved %d instances to NVS", count);
+        ESP_LOGE(TAG, "nvs_set_blob failed: %s", esp_err_to_name(err));
     }
     free(arr);
     nvs_close(handle);
@@ -315,16 +314,14 @@ esp_err_t rid_manager_load_all(void) {
     err = nvs_get_blob(handle, INST_NVS_KEY, NULL, &blob_size);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         nvs_close(handle);
-        return ESP_ERR_NOT_FOUND;
+        return ESP_ERR_NOT_FOUND;  // 不清理链表，保留现有
     } else if (err != ESP_OK) {
         nvs_close(handle);
         return err;
     }
 
-    if (blob_size == 0) {
-        nvs_close(handle);
-        return ESP_ERR_INVALID_SIZE;
-    }
+    // 读取成功，清空并重建
+    rid_manager_clear_all();
 
     instance_persist_t *arr = malloc(blob_size);
     if (!arr) {
@@ -340,17 +337,6 @@ esp_err_t rid_manager_load_all(void) {
     }
 
     int count = blob_size / sizeof(instance_persist_t);
-    if (count == 0) {
-        free(arr);
-        nvs_close(handle);
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    // 清空现有实例
-    rid_manager_clear_all();
-
-    // 重建链表
-    uint32_t max_id = 0;
     for (int i = 0; i < count; i++) {
         instance_persist_t *p = &arr[i];
         drone_instance_t *inst = malloc(sizeof(drone_instance_t));
@@ -360,27 +346,16 @@ esp_err_t rid_manager_load_all(void) {
         inst->active = p->active;
         inst->message_counter = p->message_counter;
         memcpy(&inst->config, &p->config, sizeof(rid_config_t));
-        // 头插法
+        // 重建 patrol_params
+        rid_patrol_params_from_mode(inst->config.flight_mode, &inst->config, &inst->patrol_params);
         lock();
         inst->next = s_head;
         s_head = inst;
         unlock();
-        if (p->id > max_id) max_id = p->id;
+        if (p->id > s_next_id) s_next_id = p->id + 1;
     }
-    s_next_id = max_id + 1;
-
     free(arr);
     nvs_close(handle);
-    
-    // 在加载循环结束后，打印所有实例
-    lock();
-    drone_instance_t *cur = s_head;
-    while (cur) {
-        ESP_LOGD(TAG, "Loaded instance: id=%u, active=%d, standard=%d", 
-                 cur->id, cur->active, cur->standard);
-        cur = cur->next;
-    }
-    unlock();
     return ESP_OK;
 }
 
@@ -420,7 +395,9 @@ static void dispatcher_task(void *arg) {
             // 计算位置
             double lat, lon;
             float heading;
-            rid_patrol_calculate_next_with_mode(inst->config.flight_mode, &lat, &lon, &heading);
+            double time_sec = (double)esp_timer_get_time() / 1e6;
+            rid_patrol_calculate(&inst->patrol_params, time_sec, &lat, &lon, &heading);
+            // 更新配置中的位置
             rid_config_update_position(&inst->config, (float)lat, (float)lon,
                                         inst->config.altitude_msl,
                                         inst->config.altitude_agl,
@@ -438,12 +415,15 @@ static void dispatcher_task(void *arg) {
                     payload_len = rid_pack_messages(payload, meta, &inst->config);
                 }
                 if (payload_len > 0) {
-                    esp_err_t ret = rid_wifi_set_rid_data(payload, payload_len, inst->message_counter);
-                    if (ret == ESP_OK) {
+                    ie_update_msg_t msg;
+                    msg.len = payload_len;
+                    msg.counter = inst->message_counter;
+                    memcpy(msg.payload, payload, payload_len);
+                    if (xQueueSend(s_ie_queue, &msg, 0) == pdTRUE) {
                         inst->message_counter++;
-                        ESP_LOGD(TAG, "Instance %u RID data updated",inst->id);
+                        ESP_LOGD(TAG, "Instance %u RID data queued", inst->id);
                     } else {
-                        ESP_LOGE(TAG, "Instance %u set RID data failed: %s", inst->id, esp_err_to_name(ret));
+                        ESP_LOGW(TAG, "IE queue full, dropping update for instance %u", inst->id);
                     }
                 }
             }

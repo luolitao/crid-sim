@@ -85,10 +85,10 @@ esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint
 
     // 每256帧打印一次前64字节（调试）
     static uint32_t frame_count = 0;
-    if (++frame_count % 0x0F == 0){
+    if (++frame_count % 0xFF == 0){
         // 在 rid_wifi_set_rid_data 中，设置完 Vendor IE 后
         ESP_LOGI(TAG, "Vendor IE (%d bytes):", total_len);
-        ESP_LOG_BUFFER_HEX(TAG, ie_buffer, 64);
+        ESP_LOG_BUFFER_HEX(TAG, ie_buffer, 16);
     }    
 
     esp_err_t ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, (vendor_ie_data_t *)ie_buffer); 

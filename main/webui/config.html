@@ -83,9 +83,12 @@ async function loadInstances() {
           <label>经度<input class="lon" type="number" step="0.000001" value="${inst.longitude}"></label>
           <label>高度(MSL)<input class="alt" type="number" step="0.5" value="${inst.altitude_msl}"></label>
           <label>飞行模式<select class="mode-select">
-            <option value="0" ${inst.flight_mode==0?'selected':''}>Circle</option>
-            <option value="1" ${inst.flight_mode==1?'selected':''}>PingPong</option>
-            <option value="2" ${inst.flight_mode==2?'selected':''}>S-Search</option>
+            <option value="0" ${inst.flight_mode==0?'selected':''}>圆周 (Circle)</option>
+            <option value="1" ${inst.flight_mode==1?'selected':''}>直线往返 (PingPong)</option>
+            <option value="2" ${inst.flight_mode==2?'selected':''}>S 形搜索 (S-Search)</option>
+            <option value="3" ${inst.flight_mode==3?'selected':''}>悬停 (Hover)</option>
+            <option value="4" ${inst.flight_mode==4?'selected':''}>随机游走 (Random Walk)</option>
+            <option value="5" ${inst.flight_mode==5?'selected':''}>Figure Eight (8字) </option>
           </select></label>
         </div>
         <div class="actions">

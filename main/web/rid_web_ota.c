@@ -9,6 +9,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
+#include "esp_app_desc.h"   // 用于固件版本
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include <time.h>
 
 #include "rid_web_ota.h"
 #include "rid_config.h"
@@ -122,18 +126,31 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
         httpd_resp_set_status(req, "500 Internal Server Error");
         return httpd_resp_sendstr(req, "HTTP receive error");
     }
-    ret = rid_ota_end(ota_handle);
-    s_ota_in_progress = false;
-    if (ret != ESP_OK) {
-        httpd_resp_set_status(req, "500 Internal Server Error");
-        char err_msg[64];
-        snprintf(err_msg, sizeof(err_msg), "OTA finalize failed: %s", esp_err_to_name(ret));
-        return httpd_resp_sendstr(req, err_msg);
-    }
+    ret = rid_ota_end_no_switch(ota_handle);  // 替换 rid_ota_end
+    // 在 ota_post_handler 中，调用 rid_ota_end_no_switch 后
+    char part[16], ver[64], build_time[64];
+    uint32_t size;
+    rid_ota_get_uploaded_info(part, sizeof(part), ver, sizeof(ver),
+                            build_time, sizeof(build_time), &size);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "partition", part);
+    cJSON_AddStringToObject(root, "version", ver);
+    cJSON_AddStringToObject(root, "build_time", build_time);
+    cJSON_AddNumberToObject(root, "size", size);
+    // 当前上传完成时间我们还没存储，暂时用 build_time 代替，或增加 upload_time 字段
+    char upload_time_str[64];
+    time_t now; time(&now);
+    struct tm tm_info; localtime_r(&now, &tm_info);
+    strftime(upload_time_str, sizeof(upload_time_str), "%Y-%m-%d %H:%M:%S", &tm_info);
+    cJSON_AddStringToObject(root, "upload_time", upload_time_str);
+    cJSON_AddStringToObject(root, "status", "Uploaded successfully, not activated");
+    char *json_str = cJSON_Print(root);
+    httpd_resp_set_type(req, "application/json");
     httpd_resp_set_status(req, "200 OK");
-    httpd_resp_sendstr(req, "OTA succeeded. Device is rebooting...");
-    xTaskCreate(reboot_delay_task, "reboot_task", 2048, NULL, 5, NULL);
-    return ESP_OK;
+    esp_err_t ret2 = httpd_resp_sendstr(req, json_str);
+    free(json_str);
+    // ...
+    return ret2;
 }
 
 // -------------------- 系统信息 API --------------------
@@ -160,13 +177,108 @@ static esp_err_t sysinfo_get_handler(httpd_req_t *req) {
 }
 
 
-// ==================== 初始化 ====================
+// ==================== API ====================
+// API: 获取OTA信息
+static esp_err_t ota_info_get_handler(httpd_req_t *req) {
+    char running[16], next[16];
+    char running_version[64] = "Unknown";
+    char running_build_time[64] = "Unknown";
+    char uploaded_part[16] = {0}, uploaded_ver[64] = {0};
+    char uploaded_time[64] = {0};
+    uint32_t uploaded_size = 0;
+
+    // 获取运行分区和下一个分区
+    rid_ota_get_running_partition(running, sizeof(running));
+    rid_ota_get_next_partition(next, sizeof(next));
+
+    // 读取运行分区的版本和编译时间
+    const esp_partition_t *running_part = esp_ota_get_running_partition();
+    if (running_part) {
+        esp_app_desc_t app_desc;
+        if (esp_partition_read(running_part, 0, &app_desc, sizeof(app_desc)) == ESP_OK) {
+            strncpy(running_version, app_desc.version, sizeof(running_version) - 1);
+            strncpy(running_build_time, app_desc.time, sizeof(running_build_time) - 1);
+        }
+    }
+
+    // 获取上次上传的固件信息（包含编译时间和大小）
+    rid_ota_get_uploaded_info(uploaded_part, sizeof(uploaded_part),
+                               uploaded_ver, sizeof(uploaded_ver),
+                               uploaded_time, sizeof(uploaded_time),
+                               &uploaded_size);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "running_partition", running);
+    cJSON_AddStringToObject(root, "next_partition", next);
+    cJSON_AddStringToObject(root, "running_version", running_version);
+    cJSON_AddStringToObject(root, "running_build_time", running_build_time);
+    cJSON_AddStringToObject(root, "uploaded_partition", uploaded_part);
+    cJSON_AddStringToObject(root, "uploaded_version", uploaded_ver);
+    cJSON_AddStringToObject(root, "uploaded_build_time", uploaded_time);
+    cJSON_AddNumberToObject(root, "uploaded_size", uploaded_size);
+
+    char *json_str = cJSON_Print(root);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t ret = httpd_resp_sendstr(req, json_str);
+    free(json_str);
+    return ret;
+}
+
+// API: 切换激活分区
+static esp_err_t ota_switch_post_handler(httpd_req_t *req) {
+    char buf[64];
+    int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (len <= 0) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        return httpd_resp_sendstr(req, "Empty body");
+    }
+    buf[len] = '\0';
+    cJSON *json = cJSON_Parse(buf);
+    if (!json) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        return httpd_resp_sendstr(req, "Invalid JSON");
+    }
+    cJSON *part = cJSON_GetObjectItem(json, "partition");
+    if (!part || !cJSON_IsString(part)) {
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        return httpd_resp_sendstr(req, "Missing partition");
+    }
+    const char *label = part->valuestring;
+    esp_err_t ret = rid_ota_set_boot_partition(label);
+    cJSON_Delete(json);
+    if (ret != ESP_OK) {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        char resp[64];
+        snprintf(resp, sizeof(resp), "Failed to set boot: %s", esp_err_to_name(ret));
+        return httpd_resp_sendstr(req, resp);
+    }
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
+}
+
+// API: 重启
+static esp_err_t ota_reboot_post_handler(httpd_req_t *req) {
+    // 先返回响应再重启（否则连接会断开）
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"Rebooting...\"}");
+    vTaskDelay(pdMS_TO_TICKS(100));  // 等待响应发送
+    rid_ota_reboot();
+    return ESP_OK;
+}
+
 // -------------------- 路由注册 --------------------
 void rid_web_ota_init(void) {
     if (s_server != NULL) return;
     
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 20;
+    config.stack_size = 8192;          // 增大堆栈
+    config.task_priority = 10;         // 提高优先级
+    config.recv_wait_timeout = 30;
+    config.send_wait_timeout = 30;
+ 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(ret));
@@ -191,6 +303,9 @@ void rid_web_ota_init(void) {
     httpd_uri_t api_instance_start = { .uri = "/api/instance/start", .method = HTTP_POST, .handler = instance_start_handler };
     httpd_uri_t api_instance_stop = { .uri = "/api/instance/stop", .method = HTTP_POST, .handler = instance_stop_handler };
     httpd_uri_t api_sysinfo = { .uri = "/api/sysinfo", .method = HTTP_GET, .handler = sysinfo_get_handler };
+    httpd_uri_t ota_info = { .uri = "/api/ota/info", .method = HTTP_GET, .handler = ota_info_get_handler };
+    httpd_uri_t ota_switch = { .uri = "/api/ota/switch", .method = HTTP_POST, .handler = ota_switch_post_handler };
+    httpd_uri_t ota_reboot = { .uri = "/api/ota/reboot", .method = HTTP_POST, .handler = ota_reboot_post_handler };
 
     httpd_register_uri_handler(s_server, &api_instances);
     httpd_register_uri_handler(s_server, &api_instance_post);
@@ -199,7 +314,11 @@ void rid_web_ota_init(void) {
     httpd_register_uri_handler(s_server, &api_instance_start);
     httpd_register_uri_handler(s_server, &api_instance_stop);
     httpd_register_uri_handler(s_server, &api_sysinfo);
+    httpd_register_uri_handler(s_server, &ota_info);
+    httpd_register_uri_handler(s_server, &ota_switch);
+    httpd_register_uri_handler(s_server, &ota_reboot);
 
+    
     // ---------- OTA 与配置路由 ----------
     httpd_uri_t ota = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post_handler };
     httpd_uri_t confirm = { .uri = "/confirm_ota", .method = HTTP_GET, .handler = confirm_ota_handler };
@@ -212,3 +331,13 @@ void rid_web_ota_init(void) {
     ESP_LOGI(TAG, "Web server started. Open http://192.168.4.1/ in your browser");
 }
 
+static esp_err_t ota_activate_handler(httpd_req_t *req) {
+    // 获取目标分区（通过参数 label）
+    char label[16];
+    // 从查询参数获取 label
+    *label = httpd_resp_set_type(req, "application/json");
+    // 调用 rid_ota_set_boot_partition
+    rid_ota_set_boot_partition(label);
+    // 返回成功
+    return ESP_OK;
+}
