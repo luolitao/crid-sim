@@ -42,6 +42,13 @@
 
 // ==================== 枚举定义[reference:9] ====================
 // 运行类别 (003)
+/*
+0:未定义 ;
+1:开放类 ;
+2:特定类 ;
+3:审定类 ; 
+4~ 15:预留
+*/
 typedef enum {
     GB_OP_CATEGORY_UNDEFINED = 0,
     GB_OP_CATEGORY_OPEN = 1,
@@ -50,6 +57,14 @@ typedef enum {
 } gb_op_category_t;
 
 // 无人机分类 (004)
+/*
+0:微型无人驾驶航空器 ;
+1:轻型无人驾驶航空器 ;
+2:小型无人驾驶航空器 ;
+3: 中型无人驾驶航空器 ;
+4:大型无人驾驶航空器 ; 
+5~ 15:预留
+*/
 typedef enum {
     GB_UA_CLASS_MICRO = 0,
     GB_UA_CLASS_LIGHT = 1,
@@ -59,12 +74,26 @@ typedef enum {
 } gb_ua_class_t;
 
 // 遥控站位置类型 (005)
+/*
+0:起飞点位置 ;
+1:遥控站位置 ; 
+2~ 15:预留
+*/
 typedef enum {
     GB_GCS_POS_TYPE_TAKEOFF = 0,
     GB_GCS_POS_TYPE_GCS = 1
 } gb_gcs_pos_type_t;
 
 // 运行状态 (015)
+/*
+0:未报告 ;
+1:地面 ;
+2:空中 ;
+3: 民用无人驾驶航空器为紧急状态 ;
+4:运行识别发送功能失效(民用无人驾驶航空器为非紧急状态);
+5:运行识别发送功能失效(民用无人驾驶航空器为紧急状态) ;
+6~ 15:预留
+*/
 typedef enum {
     GB_OP_STATUS_NOT_REPORTED = 0,
     GB_OP_STATUS_GROUND = 1,
@@ -81,6 +110,23 @@ typedef enum {
 } gb_coord_type_t;
 
 // 水平精度 NACp (017)[reference:10]
+/*
+置信度为95% ,取值范围为 :
+0:大于或等于18.52 km ( 10 n mile) 或未知 ;
+1:小于18.52 km(10 n mile) ;
+2:小于7.41 km(4 n mile) ;
+3:小于3.70 km(2 n mile) ;
+4:小于1852 m(1 n mile) ;
+5:小于926 m(0. 5 n mile) ;
+6:小于556 m(0. 3 n mile) ;
+7:小于185 m(0. 1 n mile) ;
+8:小于92. 6 m(0. 05 n mile) ;
+9:小于30 m ;
+10:小于10 m ;
+11:小于3 m ;
+12:小于1 m ; 
+13~15:预留
+*/
 typedef enum {
     GB_HACC_UNKNOWN_OR_GTE_18520M = 0,
     GB_HACC_LT_18520M = 1,
@@ -98,6 +144,17 @@ typedef enum {
 } gb_hacc_t;
 
 // 垂直精度 GVA (018)[reference:11]
+/*
+置信度为95% ,取值范围为:
+0:大于或等于150 m或未知;
+1:小于150 m ;
+2:小于45 m ;
+3:小于25 m ;
+4:小于10 m ;
+5:小于3 m ;
+6:小于1 m ; 
+7~15:预留
+*/
 typedef enum {
     GB_VACC_UNKNOWN_OR_GTE_150M = 0,
     GB_VACC_LT_150M = 1,
@@ -133,8 +190,8 @@ typedef enum {
 // ==================== GB46750 数据包结构 ====================
 typedef struct {
     // 必填字段 (M)
-    char uas_id[21];                // 001 唯一产品识别码
-    uint8_t reg_mark;               // 002 实名登记标志 (0=未登记, 1=已登记)
+    char uas_id[20];                // 001 唯一产品识别码
+    char reg_mark[8];               // 002 实名登记标志 (0=未登记, 1=已登记)
     gb_ua_class_t ua_class;         // 004 无人机分类
     gb_gcs_pos_type_t gcs_pos_type; // 005 遥控站位置类型
     double gcs_latitude;            // 006 遥控站位置 (度)

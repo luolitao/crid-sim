@@ -11,16 +11,37 @@
 
 #include "rid_wifi.h"
 
-static const char *TAG = "RID_WIFI";
-static bool s_wifi_driver_inited = false;
-
 #define RID_OUI_0  0xFA
 #define RID_OUI_1  0x0B
 #define RID_OUI_2  0xBC
 #define RID_OUI_TYPE 0x0D
 #define AP_DEFAULT_PASSWORD "12345678"
 
+static const char *TAG = "RID_WIFI";
+static bool s_wifi_driver_inited = false;
+
+// 设置 MAC 地址（自动适配）
+static void init_mac_address(void) {
+    uint8_t mac[6];
+    esp_err_t ret = esp_efuse_mac_get_default(mac);
+    if (ret == ESP_OK) {
+        // EFUSE MAC 有效，使用板载 MAC
+        esp_base_mac_addr_set(mac);
+        ESP_LOGI(TAG, "Using onboard MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    } else {
+        // EFUSE MAC 无效（CRC 错误），使用自定义 MAC
+        uint8_t custom_mac[6] = {0x24, 0x0A, 0xC4, 0x00, 0x00, 0x01};
+        esp_base_mac_addr_set(custom_mac);
+        ESP_LOGW(TAG, "EFUSE MAC CRC error, using custom MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 custom_mac[0], custom_mac[1], custom_mac[2],
+                 custom_mac[3], custom_mac[4], custom_mac[5]);
+    }
+}
+
 esp_err_t rid_wifi_init(uint8_t channel, const char *ssid) {
+    init_mac_address();
+
     if (!s_wifi_driver_inited) {
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
         esp_err_t ret = esp_wifi_init(&cfg);
@@ -61,11 +82,7 @@ esp_err_t rid_wifi_init(uint8_t channel, const char *ssid) {
 
 esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint8_t counter) {
     if (!payload || payload_len == 0) return ESP_ERR_INVALID_ARG;
-
-    // 构造 Vendor IE 并设置
-    // ... 原有逻辑 ...
-    esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, NULL);
-
+    
     static uint8_t ie_buffer[256];
     size_t total_len = 2 + 3 + 1 + 1 + payload_len;
     if (total_len > sizeof(ie_buffer)) {
@@ -82,16 +99,28 @@ esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint
     *ptr++ = RID_OUI_TYPE;
     *ptr++ = counter;
     memcpy(ptr, payload, payload_len);
+        
 
-    // 每256帧打印一次前64字节（调试）
-    static uint32_t frame_count = 0;
-    if (++frame_count % 0xFF == 0){
+    // 每16帧打印一次前64字节（调试）
+    if (counter % 0x10 == 0){
         // 在 rid_wifi_set_rid_data 中，设置完 Vendor IE 后
-        ESP_LOGI(TAG, "Vendor IE (%d bytes):", total_len);
-        ESP_LOG_BUFFER_HEX(TAG, ie_buffer, 16);
-    }    
+        ESP_LOGI(TAG, "Vendor IE Message Counter: %d, total_len: (%d bytes):", counter, total_len);
+        ESP_LOG_BUFFER_HEX(TAG, ie_buffer, 64);
+    } 
 
-    esp_err_t ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, (vendor_ie_data_t *)ie_buffer); 
+    // 构造 Vendor IE 并设置
+    // so first remove old element, add new afterwards
+    esp_err_t ret = esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, ie_buffer);
+    if (ret != ESP_OK) return ret;
+    ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_BEACON, WIFI_VND_IE_ID_0, ie_buffer);
+    if (ret != ESP_OK) return ret;    
 
-    return ret;
+    //set the payload also to probe requests, to increase update rate on mobile phones
+    // so first remove old element, add new afterwards
+    ret = esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
+    if (ret != ESP_OK) return ret;
+    ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
+    if (ret != ESP_OK) return ret;
+
+    return ESP_OK;
 }

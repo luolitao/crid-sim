@@ -1,4 +1,5 @@
 #include "cJSON.h"
+#include "esp_log.h"
 
 #include "rid_api.h"
 #include "rid_manager.h"
@@ -70,16 +71,17 @@ esp_err_t instance_post_handler(httpd_req_t *req) {
     if (!json) return httpd_resp_sendstr(req, "Invalid JSON");
 
     // 解析所有字段
-    cJSON *standard = cJSON_GetObjectItem(json, "standard");
+    cJSON *standard = cJSON_GetObjectItem(json, "standard");    
     cJSON *uas_id = cJSON_GetObjectItem(json, "uas_id");
     cJSON *lat = cJSON_GetObjectItem(json, "latitude");
     cJSON *lon = cJSON_GetObjectItem(json, "longitude");
     cJSON *alt = cJSON_GetObjectItem(json, "altitude_msl");
     cJSON *mode = cJSON_GetObjectItem(json, "flight_mode");
+
     if (!standard || !uas_id || !lat || !lon || !alt || !mode) {
         cJSON_Delete(json);
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Missing fields");
+        return httpd_resp_sendstr(req, "{\"error\":\"Missing or invalid id\"}");
     }
 
     rid_config_t cfg;
@@ -99,6 +101,7 @@ esp_err_t instance_post_handler(httpd_req_t *req) {
         const char *err_msg = (ret == ESP_ERR_INVALID_ARG) ? "UAS ID already exists" : "Create failed";
         return httpd_resp_sendstr(req, err_msg);
     }
+    ESP_LOGI("RID_API", "Creating instance with standard=%d, uas_id=%s", standard, uas_id);
     rid_manager_save_all();
     httpd_resp_set_status(req, "201 Created");
     char resp[32];
@@ -113,19 +116,20 @@ esp_err_t instance_put_handler(httpd_req_t *req) {
     uint32_t id;
     if (!get_id_from_query(req, &id)) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Missing or invalid id");
+        return httpd_resp_sendstr(req, "{\"error\":\"Missing or invalid id\"}");
     }
     char buf[512];
     int len = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (len <= 0) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Empty body");
+        return httpd_resp_sendstr(req, "{\"error\":\"Empty body\"}");
     }
     buf[len] = '\0';
     cJSON *json = cJSON_Parse(buf);
-    if (!json) {
+    if (!json) {// 错误
+        httpd_resp_set_type(req, "application/json");
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Invalid JSON");
+        return httpd_resp_sendstr(req, "{\"error\":\"Invalid JSON\"}");
     }
 
     // 更新 standard（如果存在）
@@ -145,7 +149,7 @@ esp_err_t instance_put_handler(httpd_req_t *req) {
     if (rid_manager_get_config(id, &cfg) != ESP_OK) {
         cJSON_Delete(json);
         httpd_resp_set_status(req, "404 Not Found");
-        return httpd_resp_sendstr(req, "Instance not found");
+        return httpd_resp_sendstr(req, "{\"error\":\"Not found\"}");
     }
 
     // 更新其他字段
@@ -177,15 +181,16 @@ esp_err_t instance_delete_handler(httpd_req_t *req) {
     uint32_t id;
     if (!get_id_from_query(req, &id)) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Missing or invalid id");
-    }
+        return httpd_resp_sendstr(req, "{\"error\":\"Missing or invalid id\"}");
+    }    
     esp_err_t ret = rid_manager_delete(id);
     if (ret != ESP_OK) {
         httpd_resp_set_status(req, "404 Not Found");
-        return httpd_resp_sendstr(req, "Not found");
+        return httpd_resp_sendstr(req, "{\"error\":\"Not found\"}");
     }
     rid_manager_save_all();
-    return httpd_resp_sendstr(req, "OK");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
 }
 
 // POST /api/instance/start?id=xxx
@@ -194,15 +199,16 @@ esp_err_t instance_start_handler(httpd_req_t *req) {
     uint32_t id;
     if (!get_id_from_query(req, &id)) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Missing or invalid id");
+        return httpd_resp_sendstr(req, "{\"error\":\"Missing or invalid id\"}");
     }
     esp_err_t ret = rid_manager_start(id);
     if (ret != ESP_OK) {
         httpd_resp_set_status(req, "404 Not Found");
-        return httpd_resp_sendstr(req, "Not found");
+        return httpd_resp_sendstr(req, "{\"error\":\"Not found\"}");
     }
     rid_manager_save_all();
-    return httpd_resp_sendstr(req, "OK");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
 }
 
 // POST /api/instance/stop?id=xxx
@@ -211,14 +217,15 @@ esp_err_t instance_stop_handler(httpd_req_t *req) {
     uint32_t id;
     if (!get_id_from_query(req, &id)) {
         httpd_resp_set_status(req, "400 Bad Request");
-        return httpd_resp_sendstr(req, "Missing or invalid id");
+        return httpd_resp_sendstr(req, "{\"error\":\"Missing or invalid id\"}");
     }
     esp_err_t ret = rid_manager_stop(id);
     if (ret != ESP_OK) {
         httpd_resp_set_status(req, "404 Not Found");
-        return httpd_resp_sendstr(req, "Not found");
+        return httpd_resp_sendstr(req, "{\"error\":\"Not found\"}");
     }
     rid_manager_save_all();
-    return httpd_resp_sendstr(req, "OK");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
 }
 

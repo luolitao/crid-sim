@@ -305,26 +305,6 @@ esp_err_t rid_ota_perform(const char *ota_url) {
 }
 
 
-// 辅助函数：获取分区信息（版本、大小等）
-static __attribute__((unused))  esp_err_t rid_ota_get_partition_info(const esp_partition_t *partition, char *version, size_t v_len, uint32_t *size) {
-    if (!partition) return ESP_ERR_INVALID_ARG;
-    
-    esp_app_desc_t app_desc;
-    esp_err_t ret = esp_partition_read(partition, 0, &app_desc, sizeof(app_desc));
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    
-    if (version) {
-        strncpy(version, app_desc.version, v_len - 1);
-        version[v_len - 1] = '\0';
-    }
-    if (size) {
-        *size = partition->size;
-    }
-    return ESP_OK;
-}
-
 // 获取当前运行分区名
 esp_err_t rid_ota_get_running_partition(char *label, size_t len) {
     const esp_partition_t *part = esp_ota_get_running_partition();
@@ -428,5 +408,35 @@ esp_err_t rid_ota_get_uploaded_info(char *partition, size_t p_len,
     if (size) {
         *size = s_uploaded_size;
     }
+    return ESP_OK;
+}
+
+// 获取所有 OTA 分区信息
+esp_err_t rid_ota_get_all_partitions(ota_partition_info_t *infos, int *count) {
+    if (!infos || !count) return ESP_ERR_INVALID_ARG;
+    *count = 0;
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *boot = esp_ota_get_boot_partition();
+
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    while (it && *count < 8) {
+        const esp_partition_t *part = esp_partition_get(it);
+        if (part) {
+            ota_partition_info_t *info = &infos[*count];
+            strncpy(info->label, part->label, sizeof(info->label)-1);
+            info->label[sizeof(info->label)-1] = '\0';
+            info->size = part->size;
+            info->is_running = (running && strcmp(part->label, running->label) == 0);
+            info->is_boot = (boot && strcmp(part->label, boot->label) == 0);
+            info->is_valid = false;  // 不尝试读取版本，统一标记为无效
+            // 版本和编译时间置空
+            info->version[0] = '\0';
+            info->compile_time[0] = '\0';
+            (*count)++;
+        }
+        it = esp_partition_next(it);
+    }
+    esp_partition_iterator_release(it);
     return ESP_OK;
 }

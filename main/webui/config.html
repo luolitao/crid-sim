@@ -52,12 +52,11 @@ const api = async (method, path, body) => {
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
-  // 如果响应是 JSON 则解析，否则返回文本
   const contentType = res.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     return await res.json();
   } else {
-    return await res.text(); // 对于 "OK" 直接返回文本
+    return await res.text(); // 兼容纯文本
   }
 };
 
@@ -74,8 +73,8 @@ async function loadInstances() {
         <h4>实例 #${inst.id} <span style="color:${inst.active?'#198754':'#dc3545'}">${inst.active?'🟢 运行中':'🔴 已停止'}</span></h4>
         <div class="row">
           <label>标准<select class="std-select">
-            <option value="0" ${inst.standard==0?'selected':''}>GB42590</option>
-            <option value="1" ${inst.standard==1?'selected':''}>GB46750</option>
+            <option value="0" ${inst.standard==0?'selected':''}>GB46750</option>
+            <option value="1" ${inst.standard==1?'selected':''}>GB42590</option>
             <option value="2" ${inst.standard==2?'selected':''}>ASTM</option>
           </select></label>
           <label>UAS ID<input class="uas-id" value="${inst.uas_id}" maxlength="20"></label>

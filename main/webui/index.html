@@ -70,7 +70,7 @@ async function loadInstancesStatus() {
       <div class="instance-card">
         <div class="info">
           <span><strong>#${inst.id}</strong></span>
-          <span>标准: ${['GB42590','GB46750','ASTM'][inst.standard]}</span>
+          <span>标准: ${['GB46750','GB42590','ASTM'][inst.standard]}</span>
           <span>位置: ${inst.latitude.toFixed(6)}, ${inst.longitude.toFixed(6)}</span>
           <span>高度: ${inst.altitude_msl.toFixed(1)}m</span>
           <span>速度: ${inst.speed_horizontal.toFixed(1)}m/s</span>

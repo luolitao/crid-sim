@@ -13,14 +13,14 @@ static const char *TAG = "RID_MSG";
 
 void rid_encode_basic_id(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_BASIC_ID & 0x0F) << 4);
+    out[0] = (config->protocol_version & 0x0F) | ((RID_MSG_BASIC_ID & 0x0F) << 4);
     out[1] = (config->ua_type & 0x0F) | ((config->id_type & 0x0F) << 4);
     strncpy((char*)(out + 2), config->uas_id, 20);
 }
 
 void rid_encode_location(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_LOCATION & 0x0F) << 4);
+    out[0] = (config->protocol_version  & 0x0F) | ((RID_MSG_LOCATION & 0x0F) << 4);
     
     bool is_west = false;
     uint8_t dir = encode_direction(config->heading, &is_west);
@@ -63,7 +63,7 @@ void rid_encode_location(const rid_config_t *config, uint8_t *out) {
 
 void rid_encode_system(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_SYSTEM & 0x0F) << 4);
+    out[0] = (config->protocol_version  & 0x0F) | ((RID_MSG_SYSTEM & 0x0F) << 4);
     // 假设 operator_location_type 为 LIVE_GNSS (1)
     out[1] = (config->operator_location_type & 0x03) | ((config->category_eu & 0x07) << 2);
     
@@ -94,21 +94,21 @@ void rid_encode_system(const rid_config_t *config, uint8_t *out) {
 
 void rid_encode_self_id(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_SELF_ID & 0x0F) << 4);
+    out[0] = (config->protocol_version  & 0x0F) | ((RID_MSG_SELF_ID & 0x0F) << 4);
     out[1] = DESC_TYPE_TEXT; // 0
     strncpy((char*)(out + 2), config->drone_name, 23);
 }
 
 void rid_encode_operator_id(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_OPERATOR_ID & 0x0F) << 4);
+    out[0] = (config->protocol_version  & 0x0F) | ((RID_MSG_OPERATOR_ID & 0x0F) << 4);
     out[1] = 0; // CAA Registration ID
     strncpy((char*)(out + 2), config->operator_id, 20);
 }
 
 void rid_encode_auth(const rid_config_t *config, uint8_t *out) {
     memset(out, 0, RID_SINGLE_MSG_SIZE);
-    out[0] = (RID_PROTOCOL_VERSION & 0x0F) | ((RID_MSG_AUTH & 0x0F) << 4);
+    out[0] = (config->protocol_version  & 0x0F) | ((RID_MSG_AUTH & 0x0F) << 4);
     out[1] = 0; // AuthType=None
     out[2] = 0; // LastPageIndex
     out[3] = 0; // Length
@@ -130,7 +130,7 @@ int rid_pack_messages(uint8_t *out, const rid_standard_meta_t *meta, const rid_c
     size_t pos = 0;
 
     // 头部：版本(低4位) + 0x19 + msg_count
-    uint8_t version_byte = 0xF0 | (meta->pack_version & 0x0F); // 高4位固定为0xF
+    uint8_t version_byte = 0xF0 | (meta->protocol_version & 0x0F); // 高4位固定为0xF
     out[pos++] = version_byte;
     out[pos++] = RID_SINGLE_MSG_SIZE;   // 0x19
     out[pos++] = meta->msg_count;
@@ -138,6 +138,8 @@ int rid_pack_messages(uint8_t *out, const rid_standard_meta_t *meta, const rid_c
     // 编码每个单消息
     for (uint8_t i = 0; i < meta->msg_count; i++) {
         meta->builders[i](config, temp[i]);
+        // 修正版本位：保留高4位（消息类型），低4位替换为 protocol_version
+        temp[i][0] = (temp[i][0] & 0xF0) | (meta->protocol_version & 0x0F);
         memcpy(out + pos, temp[i], RID_SINGLE_MSG_SIZE);
         pos += RID_SINGLE_MSG_SIZE;
     }

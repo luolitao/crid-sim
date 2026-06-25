@@ -20,20 +20,20 @@ static const msg_builder_t astm_builders[] = {
 // GB46750 不使用构建器
 const rid_standard_meta_t g_standard_meta[] = {
     {
-        .standard = RID_STANDARD_GB42590,
-        .pack_version = 1,          // 0xF1
-        .msg_count = 3,
-        .builders = gb42590_builders
-    },
-    {
         .standard = RID_STANDARD_GB46750,
-        .pack_version = 0,          // 未使用
+        .protocol_version = 0,          // 未使用
         .msg_count = 0,
         .builders = NULL
     },
     {
+        .standard = RID_STANDARD_GB42590,
+        .protocol_version = 1,          // 0xF1
+        .msg_count = 3,
+        .builders = gb42590_builders
+    },
+    {
         .standard = RID_STANDARD_ASTM,
-        .pack_version = 1,          // 0xF1（实际与 GB42590 相同）
+        .protocol_version = 2,          // 0xF2
         .msg_count = 5,
         .builders = astm_builders
     }

@@ -419,6 +419,7 @@ static void dispatcher_task(void *arg) {
                     msg.len = payload_len;
                     msg.counter = inst->message_counter;
                     memcpy(msg.payload, payload, payload_len);
+
                     if (xQueueSend(s_ie_queue, &msg, 0) == pdTRUE) {
                         inst->message_counter++;
                         ESP_LOGD(TAG, "Instance %u RID data queued", inst->id);

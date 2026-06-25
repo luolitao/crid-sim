@@ -6,14 +6,24 @@
 #include <stddef.h>
 
 
+// 分区信息结构体
 typedef struct {
-    char label[16];            // 分区标签
-    bool active;               // 是否当前运行分区
-    uint32_t size;             // 分区大小（字节）
-    uint32_t image_size;       // 实际固件大小（如果存在）
-    char version[32];          // 固件版本（从描述符读取）
-} rid_ota_partition_info_t;
+    char label[16];
+    char version[32];
+    char compile_time[32];
+    uint32_t size;
+    bool is_running;
+    bool is_boot;
+    bool is_valid;
+} ota_partition_info_t;
 
+/**
+ * @brief 获取所有OTA分区信息（ota_0和ota_1）
+ * @param infos 指向指针的指针，将被分配数组
+ * @param count 返回分区数量
+ * @return ESP_OK on success
+ */
+esp_err_t rid_ota_get_all_partitions(ota_partition_info_t *infos, int *count);
 
 // 传统 URL OTA (保持不变)
 esp_err_t rid_ota_perform(const char *ota_url);

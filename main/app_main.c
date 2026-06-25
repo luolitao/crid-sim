@@ -38,8 +38,6 @@ static void init_mac_address(void) {
 void app_main(void) {
     ESP_LOGI(TAG, "=== ESP32 Multi-Standard Remote ID Simulator ===");
 
-    init_mac_address();
-
     esp_err_t ret = rid_nvs_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "NVS Init Failed: %s", esp_err_to_name(ret));

@@ -57,6 +57,7 @@ extern SemaphoreHandle_t g_rid_config_mutex;
 typedef struct {
     uint8_t mac_address[6];
     uint8_t standard;
+    uint8_t protocol_version; 
     char uas_id[RID_UAS_ID_MAX_LEN + 1];
     uint8_t id_type;
     uint8_t ua_type;

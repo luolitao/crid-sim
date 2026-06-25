@@ -146,7 +146,8 @@ int gb46750_encode(const gb46750_data_t *data, uint8_t *out, size_t max_len) {
 
     if (local.flag_byte1 & GB_FLAG_BYTE1_REG_MARK) {
         if (pos + 1 > max_len) return -1;
-        out[pos++] = local.reg_mark;
+        memcpy(out + pos, local.reg_mark, 8);
+        pos += 8;
     }
 
     if (local.flag_byte1 & GB_FLAG_BYTE1_OP_CATEGORY) {
@@ -264,6 +265,7 @@ int gb46750_encode(const gb46750_data_t *data, uint8_t *out, size_t max_len) {
         out[pos++] = (uint8_t)local.ts_acc;
     }
 
+    out[2] = pos;
     return (int)pos;
 }
 
@@ -279,7 +281,8 @@ void gb46750_from_config(const rid_config_t *cfg, gb46750_data_t *out) {
     out->uas_id[20] = '\0';
 
     // 实名登记标志 (固定为已登记)
-    out->reg_mark = 1;
+    strncpy(out->reg_mark, "ESP32REG", 8);
+    out->reg_mark[8] = '\0';
 
     // 运行类别 (默认开放类)
     out->op_category = GB_OP_CATEGORY_OPEN;

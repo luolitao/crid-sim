@@ -40,9 +40,9 @@ h3{color:#aaa;margin:20px 0 10px;border-bottom:1px solid #333;padding-bottom:8px
   </div>
 
   <div class="card">
-    <h3>📋 分区信息</h3>
-    <div id="otaInfo" class="info-table"></div>
-  </div>
+  <h3>📋 分区信息</h3>
+  <div id="otaInfo" style="display:flex; gap:20px; flex-wrap:wrap;"></div>
+</div>
 
   <div class="card">
     <h3>📤 上传新固件</h3>
@@ -69,18 +69,19 @@ async function loadOtaInfo() {
     if (!res.ok) throw new Error('Failed to fetch');
     const data = await res.json();
     const container = document.getElementById('otaInfo');
-    container.innerHTML = `
-      <table>
-        <tr><td>当前运行分区</td><td><strong>${data.running_partition}</strong></td></tr>
-        <tr><td>固件版本</td><td><strong>${data.running_version}</strong></td></tr>
-        <tr><td>编译时间</td><td>${data.running_build_time}</td></tr>
-        <tr><td>下一个可用分区</td><td>${data.next_partition}</td></tr>
-        <tr><td>已上传固件分区</td><td>${data.uploaded_partition || '无'}</td></tr>
-        <tr><td>已上传固件版本</td><td>${data.uploaded_version || '无'}</td></tr>
-        <tr><td>已上传固件编译时间</td><td>${data.uploaded_build_time || '无'}</td></tr>
-        <tr><td>已上传固件大小</td><td>${data.uploaded_size ? (data.uploaded_size/1024).toFixed(1)+' KB' : '-'}</td></tr>
-      </table>
-    `;
+    let html = '<div style="display:flex; gap:20px; flex-wrap:wrap;">';
+    data.partitions.forEach(part => {
+      html += `
+        <div style="border:1px solid #555; border-radius:8px; padding:12px; background:#16213e; flex:1; min-width:200px;">
+          <h4>${part.label}</h4>
+          <div>大小: ${(part.size/1024).toFixed(1)} KB</div>
+          <div style="color:${part.is_running?'#198754':'#aaa'}">${part.is_running?'✅ 当前运行':''}</div>
+          <div style="color:${part.is_boot?'#ffc107':'#aaa'}">${part.is_boot?'🔜 下次启动':''}</div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
   } catch(e) {
     document.getElementById('otaInfo').innerHTML = '<span style="color:#dc3545">加载信息失败</span>';
   }

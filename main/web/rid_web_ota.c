@@ -29,11 +29,6 @@ static const char *TAG = "RID_WEB_OTA";
 static httpd_handle_t s_server = NULL;
 static volatile bool s_ota_in_progress = false;
 
-// ================= 原有其他处理函数 ====================
-static void reboot_delay_task(void *arg) {
-    vTaskDelay(pdMS_TO_TICKS(1500));
-    esp_restart();
-}
 
 // -------------------- 全局配置（兼容旧接口） --------------------
 static esp_err_t config_post_handler(httpd_req_t *req) {
@@ -180,49 +175,50 @@ static esp_err_t sysinfo_get_handler(httpd_req_t *req) {
 // ==================== API ====================
 // API: 获取OTA信息
 static esp_err_t ota_info_get_handler(httpd_req_t *req) {
-    char running[16], next[16];
-    char running_version[64] = "Unknown";
-    char running_build_time[64] = "Unknown";
-    char uploaded_part[16] = {0}, uploaded_ver[64] = {0};
-    char uploaded_time[64] = {0};
-    uint32_t uploaded_size = 0;
-
-    // 获取运行分区和下一个分区
-    rid_ota_get_running_partition(running, sizeof(running));
-    rid_ota_get_next_partition(next, sizeof(next));
-
-    // 读取运行分区的版本和编译时间
-    const esp_partition_t *running_part = esp_ota_get_running_partition();
-    if (running_part) {
-        esp_app_desc_t app_desc;
-        if (esp_partition_read(running_part, 0, &app_desc, sizeof(app_desc)) == ESP_OK) {
-            strncpy(running_version, app_desc.version, sizeof(running_version) - 1);
-            strncpy(running_build_time, app_desc.time, sizeof(running_build_time) - 1);
-        }
+    ota_partition_info_t infos[8];
+    int count = 0;
+    esp_err_t ret = rid_ota_get_all_partitions(infos, &count);
+    if (ret != ESP_OK) {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        return httpd_resp_sendstr(req, "{\"error\":\"Failed to get partitions\"}");
     }
 
-    // 获取上次上传的固件信息（包含编译时间和大小）
-    rid_ota_get_uploaded_info(uploaded_part, sizeof(uploaded_part),
-                               uploaded_ver, sizeof(uploaded_ver),
-                               uploaded_time, sizeof(uploaded_time),
-                               &uploaded_size);
-
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "running_partition", running);
-    cJSON_AddStringToObject(root, "next_partition", next);
-    cJSON_AddStringToObject(root, "running_version", running_version);
-    cJSON_AddStringToObject(root, "running_build_time", running_build_time);
-    cJSON_AddStringToObject(root, "uploaded_partition", uploaded_part);
-    cJSON_AddStringToObject(root, "uploaded_version", uploaded_ver);
-    cJSON_AddStringToObject(root, "uploaded_build_time", uploaded_time);
-    cJSON_AddNumberToObject(root, "uploaded_size", uploaded_size);
+    cJSON *partitions = cJSON_CreateArray();
+    for (int i = 0; i < count; i++) {
+        cJSON *obj = cJSON_CreateObject();
+        cJSON_AddStringToObject(obj, "label", infos[i].label);
+        cJSON_AddStringToObject(obj, "version", infos[i].version);
+        cJSON_AddStringToObject(obj, "compile_time", infos[i].compile_time);
+        cJSON_AddNumberToObject(obj, "size", infos[i].size);
+        cJSON_AddBoolToObject(obj, "is_running", infos[i].is_running);
+        cJSON_AddBoolToObject(obj, "is_boot", infos[i].is_boot);
+        cJSON_AddItemToArray(partitions, obj);
+    }
+    cJSON_AddItemToObject(root, "partitions", partitions);
+
+    // 添加已上传的固件信息
+    char uploaded_part[16] = {0}, uploaded_ver[64] = {0}, uploaded_time[64] = {0};
+    uint32_t uploaded_size = 0;
+    if (rid_ota_get_uploaded_info(uploaded_part, sizeof(uploaded_part),
+                                  uploaded_ver, sizeof(uploaded_ver),
+                                  uploaded_time, sizeof(uploaded_time),
+                                  &uploaded_size) == ESP_OK) {
+        cJSON_AddStringToObject(root, "uploaded_partition", uploaded_part);
+        cJSON_AddStringToObject(root, "uploaded_version", uploaded_ver);
+        cJSON_AddStringToObject(root, "uploaded_time", uploaded_time);
+        cJSON_AddNumberToObject(root, "uploaded_size", uploaded_size);
+    } else {
+        cJSON_AddStringToObject(root, "uploaded_partition", "");
+        cJSON_AddNumberToObject(root, "uploaded_size", 0);
+    }
 
     char *json_str = cJSON_Print(root);
     cJSON_Delete(root);
     httpd_resp_set_type(req, "application/json");
-    esp_err_t ret = httpd_resp_sendstr(req, json_str);
+    esp_err_t ret2 = httpd_resp_sendstr(req, json_str);
     free(json_str);
-    return ret;
+    return ret2;
 }
 
 // API: 切换激活分区
@@ -329,15 +325,4 @@ void rid_web_ota_init(void) {
     httpd_register_uri_handler(s_server, &ota_config);
 
     ESP_LOGI(TAG, "Web server started. Open http://192.168.4.1/ in your browser");
-}
-
-static esp_err_t ota_activate_handler(httpd_req_t *req) {
-    // 获取目标分区（通过参数 label）
-    char label[16];
-    // 从查询参数获取 label
-    *label = httpd_resp_set_type(req, "application/json");
-    // 调用 rid_ota_set_boot_partition
-    rid_ota_set_boot_partition(label);
-    // 返回成功
-    return ESP_OK;
 }

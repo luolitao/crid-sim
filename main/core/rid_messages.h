@@ -9,7 +9,7 @@
 
 #define RID_SINGLE_MSG_SIZE     25
 #define RID_MAX_PACK_MESSAGES   9
-#define RID_PROTOCOL_VERSION    1
+//#define RID_PROTOCOL_VERSION    1
 
 // 消息类型
 enum {
