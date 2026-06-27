@@ -1,190 +1,670 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C-RID 模拟器 - 配置</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;padding:20px}
-.container{max-width:1200px;margin:0 auto}
-h1{font-size:1.8em;margin-bottom:20px;color:#e94560}
-h3{color:#aaa;margin:20px 0 10px;border-bottom:1px solid #333;padding-bottom:8px}
-.card{background:#16213e;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
-.nav-links a{color:#0d6efd;text-decoration:none;margin-right:20px;font-weight:bold}
-.nav-links a:hover{text-decoration:underline}
-.instance-card{background:#0f3460;border-radius:8px;padding:16px;margin:12px 0;border-left:4px solid #e94560}
-.instance-card .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.instance-card input,select{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#fff;font-size:14px}
-.btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:0.2s}
-.btn-primary{background:#0d6efd;color:#fff}
-.btn-success{background:#198754;color:#fff}
-.btn-warning{background:#ffc107;color:#000}
-.btn-danger{background:#dc3545;color:#fff}
-.btn-sm{padding:4px 12px;font-size:0.85em}
-.actions{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.status-msg{font-size:0.9em;margin-left:12px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>C-RID 模拟器 - 无人机配置</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+        h3 {
+            color: #aaa;
+            margin: 20px 0 10px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .nav-links a {
+            color: #0d6efd;
+            text-decoration: none;
+            margin-right: 20px;
+            font-weight: bold;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .instance-card {
+            background: #0f3460;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            border-left: 4px solid #e94560;
+        }
+        .instance-card .row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        .instance-card .gb42590-fields,
+        .instance-card .gb46750-fields {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #2a3a5a;
+        }
+        .instance-card input,
+        .instance-card select {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 14px;
+        }
+        .instance-card label {
+            display: block;
+            font-size: 0.85em;
+            color: #aaa;
+            margin-bottom: 2px;
+        }
+        .btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+        .btn-primary {
+            background: #0d6efd;
+            color: #fff;
+        }
+        .btn-success {
+            background: #198754;
+            color: #fff;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #000;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 0.85em;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .actions {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .status-msg {
+            font-size: 0.9em;
+            margin-left: 12px;
+        }
+        .instance-card h4 {
+            margin: 0 0 10px 0;
+        }
+        .instance-card .status-badge {
+            float: right;
+            font-weight: normal;
+            font-size: 0.9em;
+        }
+        .instance-card .section-label {
+            color: #ffc107;
+            font-size: 0.8em;
+            margin-top: 4px;
+            grid-column: 1 / -1;
+        }
+        @media (max-width: 600px) {
+            .instance-card .row,
+            .instance-card .gb42590-fields,
+            .instance-card .gb46750-fields {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-  <h1>⚙️ 无人机配置</h1>
-  <div class="nav-links">
-    <a href="/">📊 状态</a>
-    <a href="/config.html">⚙️ 配置</a>
-    <a href="/ota.html">📦 OTA</a>
-  </div>
-
-  <div class="card">
-    <h3>🛸 无人机实例 <button id="addInstance" class="btn btn-success btn-sm" style="float:right">+ 添加</button></h3>
-    <div id="instancesContainer"></div>
-  </div>
-</div>
-
-<script>
-const api = async (method, path, body) => {
-  const res = await fetch(path, {
-    method,
-    headers: body ? {'Content-Type':'application/json'} : {},
-    body: body ? JSON.stringify(body) : undefined
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
-  }
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return await res.json();
-  } else {
-    return await res.text(); // 兼容纯文本
-  }
-};
-
-async function loadInstances() {
-  try {
-    const data = await api('GET', '/api/instances');
-    const container = document.getElementById('instancesContainer');
-    if (!data.length) {
-      container.innerHTML = '<p style="color:#888">暂无实例，点击 “添加” 创建</p>';
-      return;
-    }
-    container.innerHTML = data.map(inst => `
-      <div class="instance-card" data-id="${inst.id}">
-        <h4>实例 #${inst.id} <span style="color:${inst.active?'#198754':'#dc3545'}">${inst.active?'🟢 运行中':'🔴 已停止'}</span></h4>
-        <div class="row">
-          <label>标准<select class="std-select">
-            <option value="0" ${inst.standard==0?'selected':''}>GB46750</option>
-            <option value="1" ${inst.standard==1?'selected':''}>GB42590</option>
-            <option value="2" ${inst.standard==2?'selected':''}>ASTM</option>
-          </select></label>
-          <label>UAS ID<input class="uas-id" value="${inst.uas_id}" maxlength="20"></label>
-          <label>纬度<input class="lat" type="number" step="0.000001" value="${inst.latitude}"></label>
-          <label>经度<input class="lon" type="number" step="0.000001" value="${inst.longitude}"></label>
-          <label>高度(MSL)<input class="alt" type="number" step="0.5" value="${inst.altitude_msl}"></label>
-          <label>飞行模式<select class="mode-select">
-            <option value="0" ${inst.flight_mode==0?'selected':''}>圆周 (Circle)</option>
-            <option value="1" ${inst.flight_mode==1?'selected':''}>直线往返 (PingPong)</option>
-            <option value="2" ${inst.flight_mode==2?'selected':''}>S 形搜索 (S-Search)</option>
-            <option value="3" ${inst.flight_mode==3?'selected':''}>悬停 (Hover)</option>
-            <option value="4" ${inst.flight_mode==4?'selected':''}>随机游走 (Random Walk)</option>
-            <option value="5" ${inst.flight_mode==5?'selected':''}>Figure Eight (8字) </option>
-          </select></label>
+    <div class="container">
+        <h1>⚙️ 无人机实例配置</h1>
+        <div class="nav-links">
+            <a href="/">📊 状态</a>
+            <a href="/config.html">⚙️ 配置</a>
+            <a href="/ota.html">📦 OTA</a>
         </div>
-        <div class="actions">
-          <button class="btn btn-success btn-sm start-btn" ${inst.active?'disabled':''}>启动</button>
-          <button class="btn btn-warning btn-sm stop-btn" ${!inst.active?'disabled':''}>停止</button>
-          <button class="btn btn-primary btn-sm save-btn">保存</button>
-          <button class="btn btn-danger btn-sm delete-btn">删除</button>
-          <span class="status-msg"></span>
-        </div>
-      </div>
-    `).join('');
 
-    // 绑定事件（与之前相同）
-    // ... 事件绑定代码（从旧 index.html 复制即可）
-    // 为避免重复，此处略，可参考之前完整的 JS
-    document.querySelectorAll('.start-btn').forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.closest('.instance-card').dataset.id;
-        try {
-          await api('POST', `/api/instance/start?id=${id}`);
-          loadInstances();
-        } catch(e){ alert('启动失败'); }
-      };
-    });
-    document.querySelectorAll('.stop-btn').forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.closest('.instance-card').dataset.id;
-        try {
-          await api('POST', `/api/instance/stop?id=${id}`);
-          loadInstances();
-        } catch(e){ alert('停止失败'); }
-      };
-    });
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.onclick = async () => {
-        if (!confirm('确认删除此实例？')) return;
-        const id = btn.closest('.instance-card').dataset.id;
-        try {
-          await api('DELETE', `/api/instance?id=${id}`);
-          loadInstances();
-        } catch(e){ alert('删除失败'); }
-      };
-    });
-    document.querySelectorAll('.save-btn').forEach(btn => {
-      btn.onclick = async function() {
-        const card = this.closest('.instance-card');
-        const id = card.dataset.id;
-        const msg = card.querySelector('.status-msg');
-        msg.textContent = '保存中...';
-        msg.style.color = '#ffc107';
-        try {
-          const data = {
-            uas_id: card.querySelector('.uas-id').value,
-            latitude: parseFloat(card.querySelector('.lat').value),
-            longitude: parseFloat(card.querySelector('.lon').value),
-            altitude_msl: parseFloat(card.querySelector('.alt').value),
-            altitude_agl: parseFloat(card.querySelector('.alt').value),
-            flight_mode: parseInt(card.querySelector('.mode-select').value),
-            standard: parseInt(card.querySelector('.std-select').value)  // 新增
-          };
-          const res = await fetch(`/api/instance?id=${id}`, {
-            method: 'PUT',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify(data)
-          });
-          if (res.ok) {
-            msg.textContent = '✓ 已保存';
-            msg.style.color = 'green';
-            // 可选：刷新列表
-            setTimeout(() => { msg.textContent = ''; }, 2000);
-            loadInstances();
-          } else {
-            const err = await res.text();
-            msg.textContent = '✗ 失败: ' + err;
-          }
-        } catch(e) {
-          msg.textContent = '✗ 失败: ' + e.message;
-          msg.style.color = '#dc3545';
-          setTimeout(() => { msg.textContent = ''; }, 3000);
+        <div class="card">
+            <h3>🛸 实例列表 <button id="addInstance" class="btn btn-success btn-sm" style="float:right">+ 添加实例</button></h3>
+            <div id="instancesContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 工具函数 ====================
+        const api = async (method, path, body) => {
+            const res = await fetch(path, {
+                method,
+                headers: body ? { 'Content-Type': 'application/json' } : {},
+                body: body ? JSON.stringify(body) : undefined
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || `HTTP ${res.status}`);
+            }
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await res.json();
+            }
+            return await res.text();
+        };
+
+        // ==================== 加载实例列表 ====================
+        async function loadInstances() {
+            try {
+                const data = await api('GET', '/api/instances');
+                const container = document.getElementById('instancesContainer');
+                if (!data.length) {
+                    container.innerHTML = '<p style="color:#888">暂无实例，点击 “添加实例” 创建</p>';
+                    return;
+                }
+
+                container.innerHTML = data.map(inst => {
+                    const active = inst.active;
+                    const isGb42590 = (inst.standard === 1);
+                    const isAstm = (inst.standard === 2);
+                    const isGb46750 = (inst.standard === 0);
+                    const showGb42590 = isGb42590 || isAstm;
+
+                    // 标准名称
+                    let stdName = 'GB42590';
+                    if (isAstm) stdName = 'ASTM';
+                    else if (isGb46750) stdName = 'GB46750';
+
+                    return `
+                        <div class="instance-card" data-id="${inst.id}">
+                            <h4>
+                                实例 #${inst.id}
+                                <span class="status-badge" style="color:${active ? '#198754' : '#dc3545'}">
+                                    ${active ? '🟢 运行中' : '🔴 已停止'}
+                                </span>
+                                <span style="margin-left:10px;font-size:0.8em;color:#aaa;">
+                                    ${stdName}
+                                </span>
+                            </h4>
+
+                            <!-- 通用基础字段（所有标准共用） -->
+                            <div class="row">
+                                <label>标准
+                                    <select class="std-select">
+                                        <option value="0" ${inst.standard===0?'selected':''}>GB46750</option>
+                                        <option value="1" ${inst.standard===1?'selected':''}>GB42590</option>
+                                        <option value="2" ${inst.standard===2?'selected':''}>ASTM</option>
+                                    </select>
+                                </label>
+                                <label>UAS ID
+                                    <input class="uas-id" value="${inst.uas_id || ''}" maxlength="20">
+                                </label>
+                                <label>纬度
+                                    <!-- 纬度 -->
+                                    <input class="lat" type="number" step="0.000001" min="-90" max="90" 
+                                        value="${inst.latitude || 0}" 
+                                        oninput="this.setCustomValidity(this.value<-90||this.value>90?'纬度范围-90~90':'')">
+                                </label>
+                                <label>经度
+
+                                    <!-- 经度 -->
+                                    <input class="lon" type="number" step="0.000001" min="-180" max="180"
+                                        value="${inst.longitude || 0}"
+                                        oninput="this.setCustomValidity(this.value<-180||this.value>180?'经度范围-180~180':'')">
+                                </label>
+                                <label>高度(MSL)
+                                    <!-- 高度 -->
+                                    <input class="alt" type="number" step="0.5" min="-1000" max="31767.5"
+                                        value="${inst.altitude_msl || 0}"
+                                        oninput="this.setCustomValidity(this.value<-1000||this.value>31767.5?'高度范围-1000~31767.5m':'')">
+                                </label>
+                                <label>高度(AGL)
+                                    <!-- 高度 -->
+                                    <input class="alt-agl" type="number" step="0.5" min="-1000" max="31767.5"
+                                        value="${inst.altitude_agl || 0}"
+                                        oninput="this.setCustomValidity(this.value<-1000||this.value>31767.5?'高度范围-1000~31767.5m':'')">
+                                </label>
+                                <label>地速 (m/s)
+                                    <!-- 地速 -->
+                                    <input class="speed" type="number" step="0.1" min="0" max="254.25"
+                                        value="${inst.speed_horizontal || 0}"
+                                        oninput="this.setCustomValidity(this.value<0||this.value>254.25?'地速范围0~254.25m/s':'')">
+                                </label>
+                                <label>垂直速度 (m/s)
+                                    <!-- 垂直速度 -->
+                                    <input class="vert-speed" type="number" step="0.1" min="-62" max="62"
+                                        value="${inst.speed_vertical || 0}"
+                                        oninput="this.setCustomValidity(this.value<-62||this.value>62?'垂直速度范围-62~62m/s':'')">
+                                </label>
+                                <label>航向 (度)
+
+                                    <!-- 航向 -->
+                                    <input class="heading" type="number" step="1" min="0" max="359"
+                                        value="${inst.heading || 0}"
+                                        oninput="this.setCustomValidity(this.value<0||this.value>=360?'航向范围0~359度':'')">
+                                </label>
+                                <label>飞行模式
+                                    <select class="mode-select">
+                                        <option value="0" ${inst.flight_mode===0?'selected':''}>圆周</option>
+                                        <option value="1" ${inst.flight_mode===1?'selected':''}>直线往返</option>
+                                        <option value="2" ${inst.flight_mode===2?'selected':''}>S形搜索</option>
+                                        <option value="3" ${inst.flight_mode===3?'selected':''}>悬停</option>
+                                        <option value="4" ${inst.flight_mode===4?'selected':''}>随机游走</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <!-- GB42590 / ASTM 特有字段 -->
+                            <div class="gb42590-fields" style="display:${showGb42590 ? 'grid' : 'none'}">
+                                <label>ID类型
+                                    <select class="id-type">
+                                        <option value="0" ${inst.id_type===0?'selected':''}>None</option>
+                                        <option value="1" ${inst.id_type===1?'selected':''}>Serial Number</option>
+                                        <option value="2" ${inst.id_type===2?'selected':''}>CAA Registration</option>
+                                        <option value="3" ${inst.id_type===3?'selected':''}>UTM Assigned UUID</option>
+                                        <option value="4" ${inst.id_type===4?'selected':''}>Specific Session ID</option>
+                                    </select>
+                                </label>
+                                <label>UA类型
+                                    <select class="ua-type">
+                                        <option value="0" ${inst.ua_type===0?'selected':''}>None</option>
+                                        <option value="1" ${inst.ua_type===1?'selected':''}>Aeroplane</option>
+                                        <option value="2" ${inst.ua_type===2?'selected':''}>Helicopter</option>
+                                        <option value="3" ${inst.ua_type===3?'selected':''}>Gyroplane</option>
+                                        <option value="4" ${inst.ua_type===4?'selected':''}>Hybrid Lift</option>
+                                        <option value="5" ${inst.ua_type===5?'selected':''}>Ornithopter</option>
+                                        <option value="6" ${inst.ua_type===6?'selected':''}>Glider</option>
+                                        <option value="7" ${inst.ua_type===7?'selected':''}>Kite</option>
+                                        <option value="8" ${inst.ua_type===8?'selected':''}>Free Balloon</option>
+                                        <option value="9" ${inst.ua_type===9?'selected':''}>Captive Balloon</option>
+                                        <option value="10" ${inst.ua_type===10?'selected':''}>Airship</option>
+                                        <option value="11" ${inst.ua_type===11?'selected':''}>Free Fall/Parachute</option>
+                                        <option value="12" ${inst.ua_type===12?'selected':''}>Rocket</option>
+                                        <option value="13" ${inst.ua_type===13?'selected':''}>Tethered Powered</option>
+                                        <option value="14" ${inst.ua_type===14?'selected':''}>Ground Obstacle</option>
+                                        <option value="15" ${inst.ua_type===15?'selected':''}>Other</option>
+                                    </select>
+                                </label>
+                                <label>运行状态
+                                    <select class="status">
+                                        <option value="0" ${inst.status===0?'selected':''}>Undeclared</option>
+                                        <option value="1" ${inst.status===1?'selected':''}>Ground</option>
+                                        <option value="2" ${inst.status===2?'selected':''}>Airborne</option>
+                                        <option value="3" ${inst.status===3?'selected':''}>Emergency</option>
+                                        <option value="4" ${inst.status===4?'selected':''}>Remote ID Failure</option>
+                                    </select>
+                                </label>
+                                <label>高度类型
+                                    <select class="height-type">
+                                        <option value="0" ${inst.height_type===0?'selected':''}>Over Takeoff</option>
+                                        <option value="1" ${inst.height_type===1?'selected':''}>AGL</option>
+                                    </select>
+                                </label>
+                                <label>水平精度
+                                    <select class="h-acc">
+                                        <option value="0" ${inst.h_acc===0?'selected':''}>≥18.52km</option>
+                                        <option value="1" ${inst.h_acc===1?'selected':''}><18.52km</option>
+                                        <option value="2" ${inst.h_acc===2?'selected':''}><7.41km</option>
+                                        <option value="3" ${inst.h_acc===3?'selected':''}><3.70km</option>
+                                        <option value="4" ${inst.h_acc===4?'selected':''}><1.852km</option>
+                                        <option value="5" ${inst.h_acc===5?'selected':''}><926m</option>
+                                        <option value="6" ${inst.h_acc===6?'selected':''}><556m</option>
+                                        <option value="7" ${inst.h_acc===7?'selected':''}><185m</option>
+                                        <option value="8" ${inst.h_acc===8?'selected':''}><92.6m</option>
+                                        <option value="9" ${inst.h_acc===9?'selected':''}><30m</option>
+                                        <option value="10" ${inst.h_acc===10?'selected':''}><10m</option>
+                                        <option value="11" ${inst.h_acc===11?'selected':''}><3m</option>
+                                        <option value="12" ${inst.h_acc===12?'selected':''}><1m</option>
+                                    </select>
+                                </label>
+                                <label>垂直精度
+                                    <select class="v-acc">
+                                        <option value="0" ${inst.v_acc===0?'selected':''}>≥150m</option>
+                                        <option value="1" ${inst.v_acc===1?'selected':''}><150m</option>
+                                        <option value="2" ${inst.v_acc===2?'selected':''}><45m</option>
+                                        <option value="3" ${inst.v_acc===3?'selected':''}><25m</option>
+                                        <option value="4" ${inst.v_acc===4?'selected':''}><10m</option>
+                                        <option value="5" ${inst.v_acc===5?'selected':''}><3m</option>
+                                        <option value="6" ${inst.v_acc===6?'selected':''}><1m</option>
+                                    </select>
+                                </label>
+                                <label>速度精度
+                                    <select class="spd-acc">
+                                        <option value="0" ${inst.spd_acc===0?'selected':''}>≥10m/s</option>
+                                        <option value="1" ${inst.spd_acc===1?'selected':''}><10m/s</option>
+                                        <option value="2" ${inst.spd_acc===2?'selected':''}><3m/s</option>
+                                        <option value="3" ${inst.spd_acc===3?'selected':''}><1m/s</option>
+                                        <option value="4" ${inst.spd_acc===4?'selected':''}><0.3m/s</option>
+                                    </select>
+                                </label>
+                                <label>时间戳精度
+                                    <select class="ts-acc">
+                                        <option value="0" ${inst.ts_acc===0?'selected':''}>Unknown</option>
+                                        <option value="1" ${inst.ts_acc===1?'selected':''}>≤0.5s</option>
+                                        <option value="2" ${inst.ts_acc===2?'selected':''}>≤0.4s</option>
+                                        <option value="3" ${inst.ts_acc===3?'selected':''}>≤0.3s</option>
+                                        <option value="4" ${inst.ts_acc===4?'selected':''}>≤0.2s</option>
+                                        <option value="5" ${inst.ts_acc===5?'selected':''}>≤0.1s</option>
+                                        <option value="6" ${inst.ts_acc===6?'selected':''}>≤50ms</option>
+                                        <option value="7" ${inst.ts_acc===7?'selected':''}>≤20ms</option>
+                                        <option value="8" ${inst.ts_acc===8?'selected':''}>≤10ms</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <!-- GB46750 特有字段 -->
+                            <div class="gb46750-fields" style="display:${isGb46750 ? 'grid' : 'none'}">
+                                <label>实名登记标志 (8位字符)
+                                    <input class="reg-mark" type="text" maxlength="8" value="${inst.reg_mark || ''}" placeholder="例如: 12345678">
+                                </label>
+                                <label>运行类别
+                                    <select class="op-category">
+                                        <option value="0" ${inst.op_category===0?'selected':''}>未定义</option>
+                                        <option value="1" ${inst.op_category===1?'selected':''}>开放类</option>
+                                        <option value="2" ${inst.op_category===2?'selected':''}>特定类</option>
+                                        <option value="3" ${inst.op_category===3?'selected':''}>审定类</option>
+                                    </select>
+                                </label>
+                                <label>无人机分类
+                                    <select class="ua-class">
+                                        <option value="0" ${inst.ua_class===0?'selected':''}>微型</option>
+                                        <option value="1" ${inst.ua_class===1?'selected':''}>轻型</option>
+                                        <option value="2" ${inst.ua_class===2?'selected':''}>小型</option>
+                                        <option value="3" ${inst.ua_class===3?'selected':''}>中型</option>
+                                        <option value="4" ${inst.ua_class===4?'selected':''}>大型</option>
+                                    </select>
+                                </label>
+                                <label>遥控站位置类型
+                                    <select class="gcs-pos-type">
+                                        <option value="0" ${inst.gcs_pos_type===0?'selected':''}>起飞点</option>
+                                        <option value="1" ${inst.gcs_pos_type===1?'selected':''}>遥控站</option>
+                                    </select>
+                                </label>
+                                <label>坐标系类型
+                                    <select class="coord-type">
+                                        <option value="0" ${inst.coord_type===0?'selected':''}>WGS-84</option>
+                                        <option value="1" ${inst.coord_type===1?'selected':''}>CGCS2000</option>
+                                    </select>
+                                </label>
+                                <label>水平精度
+                                    <select class="h-acc-gb46750">
+                                        <option value="0" ${inst.h_acc===0?'selected':''}>≥18.52km</option>
+                                        <option value="1" ${inst.h_acc===1?'selected':''}><18.52km</option>
+                                        <option value="2" ${inst.h_acc===2?'selected':''}><7.41km</option>
+                                        <option value="3" ${inst.h_acc===3?'selected':''}><3.70km</option>
+                                        <option value="4" ${inst.h_acc===4?'selected':''}><1.852km</option>
+                                        <option value="5" ${inst.h_acc===5?'selected':''}><926m</option>
+                                        <option value="6" ${inst.h_acc===6?'selected':''}><556m</option>
+                                        <option value="7" ${inst.h_acc===7?'selected':''}><185m</option>
+                                        <option value="8" ${inst.h_acc===8?'selected':''}><92.6m</option>
+                                        <option value="9" ${inst.h_acc===9?'selected':''}><30m</option>
+                                        <option value="10" ${inst.h_acc===10?'selected':''}><10m</option>
+                                        <option value="11" ${inst.h_acc===11?'selected':''}><3m</option>
+                                        <option value="12" ${inst.h_acc===12?'selected':''}><1m</option>
+                                    </select>
+                                </label>
+                                <label>垂直精度
+                                    <select class="v-acc-gb46750">
+                                        <option value="0" ${inst.v_acc===0?'selected':''}>≥150m</option>
+                                        <option value="1" ${inst.v_acc===1?'selected':''}><150m</option>
+                                        <option value="2" ${inst.v_acc===2?'selected':''}><45m</option>
+                                        <option value="3" ${inst.v_acc===3?'selected':''}><25m</option>
+                                        <option value="4" ${inst.v_acc===4?'selected':''}><10m</option>
+                                        <option value="5" ${inst.v_acc===5?'selected':''}><3m</option>
+                                        <option value="6" ${inst.v_acc===6?'selected':''}><1m</option>
+                                    </select>
+                                </label>
+                                <label>速度精度
+                                    <select class="spd-acc-gb46750">
+                                        <option value="0" ${inst.spd_acc===0?'selected':''}>≥10m/s</option>
+                                        <option value="1" ${inst.spd_acc===1?'selected':''}><10m/s</option>
+                                        <option value="2" ${inst.spd_acc===2?'selected':''}><3m/s</option>
+                                        <option value="3" ${inst.spd_acc===3?'selected':''}><1m/s</option>
+                                        <option value="4" ${inst.spd_acc===4?'selected':''}><0.3m/s</option>
+                                    </select>
+                                </label>
+                                <label>时间戳精度
+                                    <select class="ts-acc-gb46750">
+                                        <option value="0" ${inst.ts_acc===0?'selected':''}>Unknown</option>
+                                        <option value="1" ${inst.ts_acc===1?'selected':''}>≤0.5s</option>
+                                        <option value="2" ${inst.ts_acc===2?'selected':''}>≤0.4s</option>
+                                        <option value="3" ${inst.ts_acc===3?'selected':''}>≤0.3s</option>
+                                        <option value="4" ${inst.ts_acc===4?'selected':''}>≤0.2s</option>
+                                        <option value="5" ${inst.ts_acc===5?'selected':''}>≤0.1s</option>
+                                        <option value="6" ${inst.ts_acc===6?'selected':''}>≤50ms</option>
+                                        <option value="7" ${inst.ts_acc===7?'selected':''}>≤20ms</option>
+                                        <option value="8" ${inst.ts_acc===8?'selected':''}>≤10ms</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div class="actions">
+                                <button class="btn btn-success btn-sm start-btn" ${active ? 'disabled' : ''}>启动</button>
+                                <button class="btn btn-warning btn-sm stop-btn" ${!active ? 'disabled' : ''}>停止</button>
+                                <button class="btn btn-primary btn-sm save-btn">保存</button>
+                                <button class="btn btn-danger btn-sm delete-btn">删除</button>
+                                <span class="status-msg"></span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // -------------------- 事件绑定 --------------------
+                // 1. 标准切换 → 显示/隐藏对应的特有字段区域
+                document.querySelectorAll('.std-select').forEach(sel => {
+                    sel.addEventListener('change', function() {
+                        const card = this.closest('.instance-card');
+                        const std = parseInt(this.value);
+                        const gb42590Fields = card.querySelector('.gb42590-fields');
+                        const gb46750Fields = card.querySelector('.gb46750-fields');
+                        if (std === 0) { // GB46750
+                            gb42590Fields.style.display = 'none';
+                            gb46750Fields.style.display = 'grid';
+                        } else { // GB42590 or ASTM
+                            gb42590Fields.style.display = 'grid';
+                            gb46750Fields.style.display = 'none';
+                        }
+                    });
+                });
+
+                // 2. 启动
+                document.querySelectorAll('.start-btn').forEach(btn => {
+                    btn.onclick = async function() {
+                        const id = this.closest('.instance-card').dataset.id;
+                        try {
+                            await api('POST', `/api/instance/start?id=${id}`);
+                            loadInstances();
+                        } catch (e) { alert('启动失败: ' + e.message); }
+                    };
+                });
+
+                // 3. 停止
+                document.querySelectorAll('.stop-btn').forEach(btn => {
+                    btn.onclick = async function() {
+                        const id = this.closest('.instance-card').dataset.id;
+                        try {
+                            await api('POST', `/api/instance/stop?id=${id}`);
+                            loadInstances();
+                        } catch (e) { alert('停止失败: ' + e.message); }
+                    };
+                });
+
+                // 4. 删除
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.onclick = async function() {
+                        if (!confirm('确认删除此实例？')) return;
+                        const id = this.closest('.instance-card').dataset.id;
+                        try {
+                            await api('DELETE', `/api/instance?id=${id}`);
+                            loadInstances();
+                        } catch (e) { alert('删除失败: ' + e.message); }
+                    };
+                });
+
+                // 5. 保存
+                document.querySelectorAll('.save-btn').forEach(btn => {
+                    btn.onclick = async function() {
+                        const card = this.closest('.instance-card');
+                        const id = card.dataset.id;
+                        const msg = card.querySelector('.status-msg');
+                        msg.textContent = '保存中...';
+                        msg.style.color = '#ffc107';
+
+                        try {
+                            // 收集基础字段
+                            const data = {
+                                uas_id: card.querySelector('.uas-id').value,
+                                latitude: parseFloat(card.querySelector('.lat').value) || 0,
+                                longitude: parseFloat(card.querySelector('.lon').value) || 0,
+                                altitude_msl: parseFloat(card.querySelector('.alt').value) || 0,
+                                altitude_agl: parseFloat(card.querySelector('.alt-agl').value) || 0,
+                                speed_horizontal: parseFloat(card.querySelector('.speed').value) || 0,
+                                speed_vertical: parseFloat(card.querySelector('.vert-speed').value) || 0,
+                                heading: parseFloat(card.querySelector('.heading').value) || 0,
+                                flight_mode: parseInt(card.querySelector('.mode-select').value) || 0,
+                                standard: parseInt(card.querySelector('.std-select').value)
+                            };
+
+                            const std = data.standard;
+                            if (std === 0) { // GB46750
+                                data.reg_mark = card.querySelector('.reg-mark').value.trim();
+                                data.op_category = parseInt(card.querySelector('.op-category').value) || 0;
+                                data.ua_class = parseInt(card.querySelector('.ua-class').value) || 0;
+                                data.gcs_pos_type = parseInt(card.querySelector('.gcs-pos-type').value) || 0;
+                                data.coord_type = parseInt(card.querySelector('.coord-type').value) || 0;
+                                data.h_acc = parseInt(card.querySelector('.h-acc-gb46750').value) || 0;
+                                data.v_acc = parseInt(card.querySelector('.v-acc-gb46750').value) || 0;
+                                data.spd_acc = parseInt(card.querySelector('.spd-acc-gb46750').value) || 0;
+                                data.ts_acc = parseInt(card.querySelector('.ts-acc-gb46750').value) || 0;
+                            } else { // GB42590 / ASTM
+                                data.id_type = parseInt(card.querySelector('.id-type').value) || 0;
+                                data.ua_type = parseInt(card.querySelector('.ua-type').value) || 0;
+                                data.status = parseInt(card.querySelector('.status').value) || 0;
+                                data.height_type = parseInt(card.querySelector('.height-type').value) || 0;
+                                data.h_acc = parseInt(card.querySelector('.h-acc').value) || 0;
+                                data.v_acc = parseInt(card.querySelector('.v-acc').value) || 0;
+                                data.spd_acc = parseInt(card.querySelector('.spd-acc').value) || 0;
+                                data.ts_acc = parseInt(card.querySelector('.ts-acc').value) || 0;
+                            }
+                            // 收集基础字段（保持不变）
+                            // ... 收集 data ...
+
+                            // 航向归一化（在收集 data 后）
+                            let heading = data.heading;
+                            heading = ((heading % 360) + 360) % 360;
+                            data.heading = heading;
+
+                            // 前端轻量校验（仅提示，不阻断）
+                            let errMsg = '';
+                            if (data.latitude < -90 || data.latitude > 90) errMsg += '纬度范围-90~90；';
+                            if (data.longitude < -180 || data.longitude > 180) errMsg += '经度范围-180~180；';
+                            if (data.altitude_msl < -1000 || data.altitude_msl > 31767.5) errMsg += 'MSL高度范围-1000~31767.5m；';
+                            if (data.altitude_agl < -1000 || data.altitude_agl > 31767.5) errMsg += 'AGL高度范围-1000~31767.5m；';
+                            if (data.speed_horizontal < 0 || data.speed_horizontal > 254.25) errMsg += '地速范围0~254.25m/s；';
+                            if (data.speed_vertical < -62 || data.speed_vertical > 62) errMsg += '垂直速度范围-62~62m/s；';
+
+                            if (errMsg) {
+                                msg.textContent = '✗ ' + errMsg;
+                                msg.style.color = '#dc3545';
+                                return;
+                            }
+
+                            // 发送 PUT 请求（保持不变）
+                            const res = await fetch(`/api/instance?id=${id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(data)
+                            });
+                            if (!res.ok) {
+                                const err = await res.text();
+                                throw new Error(err);
+                            }
+                            msg.textContent = '✓ 已保存';
+                            msg.style.color = '#198754';
+                            setTimeout(() => { msg.textContent = ''; }, 2000);
+                            loadInstances();
+                        } catch (e) {
+                            msg.textContent = '✗ 失败: ' + e.message;
+                            msg.style.color = '#dc3545';
+                            setTimeout(() => { msg.textContent = ''; }, 3000);
+                        }
+                    };
+                });
+
+            } catch (e) {
+                document.getElementById('instancesContainer').innerHTML =
+                    `<p style="color:#dc3545">加载失败: ${e.message}</p>`;
+            }
         }
-      };
-    });
-  } catch(e) { 
-    document.getElementById('instancesContainer').innerHTML =
-      `<p style="color:#dc3545">加载失败: ${e.message}</p>`;/* ... */ }
-}
 
-document.getElementById('addInstance').onclick = async () => {
-  try {
-    await api('POST', '/api/instance', {
-      standard:0, uas_id:'ESP32-DRONE', latitude:23.14287, longitude:113.26026, altitude_msl:50, flight_mode:0
-    });
-    loadInstances();
-  } catch(e){ alert('添加失败'); }
-};
+        // ==================== 添加实例 ====================
+        document.getElementById('addInstance').onclick = async () => {
+            try {
+                const defaultData = {
+                    standard: 1,
+                    uas_id: 'ESP32-DRONE',
+                    latitude: 23.14287,
+                    longitude: 113.26026,
+                    altitude_msl: 50,
+                    altitude_agl: 50,
+                    speed_horizontal: 1.0,
+                    speed_vertical: 0,
+                    heading: 0,
+                    flight_mode: 0,
+                    // GB42590 默认
+                    id_type: 1,
+                    ua_type: 2,
+                    status: 2,
+                    height_type: 0,
+                    h_acc: 11,
+                    v_acc: 5,
+                    spd_acc: 4,
+                    ts_acc: 4,
+                    // GB46750 默认（尽管标准不是它，但带上）
+                    reg_mark: '',
+                    op_category: 1,
+                    ua_class: 1,
+                    gcs_pos_type: 0,
+                    coord_type: 0
+                };
+                await api('POST', '/api/instance', defaultData);
+                loadInstances();
+            } catch (e) { alert('添加失败: ' + e.message); }
+        };
 
-loadInstances();
-</script>
+        // ==================== 初始加载 ====================
+        loadInstances();
+    </script>
 </body>
 </html>

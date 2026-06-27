@@ -155,7 +155,7 @@ void rid_patrol_calculate(const patrol_params_t *params,
 // 全局变量用于兼容旧接口
 // 注意：这些变量仅供旧接口使用，新代码应使用参数结构体
 static float g_altitude_msl = 50.0f;
-static float g_altitude_agl = 50.0f;
+static float g_altitude_agl = 60.0f;
 static double g_center_lat = 23.14287;
 static double g_center_lon = 113.26026;
 static float g_speed = 5.0f;

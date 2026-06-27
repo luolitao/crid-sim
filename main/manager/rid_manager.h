@@ -8,6 +8,20 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
+// rid_manager.h 中增加（可选）
+#define RID_PERSIST_MAGIC   0x52494449  // "RIDI"
+#define RID_PERSIST_VERSION 1           // 当前版本，每次结构体变化时递增
+
+typedef struct {
+    uint32_t magic;              // 魔数，用于校验数据格式
+    uint32_t version;            // 版本号
+    uint32_t id;
+    rid_standard_t standard;
+    bool active;
+    uint8_t message_counter;
+    rid_config_t config;         // 当前结构体大小由 rid_config_t 定义
+} instance_persist_t;
+
 // 无人机实例结构（公开定义）
 // 可以在 drone_instance_t 中添加 patrol_params 字段
 typedef struct drone_instance {

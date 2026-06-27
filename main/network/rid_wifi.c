@@ -117,10 +117,10 @@ esp_err_t rid_wifi_set_rid_data(const uint8_t *payload, size_t payload_len, uint
 
     //set the payload also to probe requests, to increase update rate on mobile phones
     // so first remove old element, add new afterwards
-    ret = esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
-    if (ret != ESP_OK) return ret;
-    ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
-    if (ret != ESP_OK) return ret;
+    // ret = esp_wifi_set_vendor_ie(false, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
+    // if (ret != ESP_OK) return ret;
+    // ret = esp_wifi_set_vendor_ie(true, WIFI_VND_IE_TYPE_PROBE_RESP, WIFI_VND_IE_ID_0, ie_buffer);
+    // if (ret != ESP_OK) return ret;
 
     return ESP_OK;
 }

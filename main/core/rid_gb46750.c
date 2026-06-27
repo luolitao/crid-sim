@@ -16,8 +16,8 @@ static int32_t encode_latlon(double deg) {
 
 // 编码高度: 0.5m/LSB, 偏移 -1000m
 static uint16_t encode_altitude(float m) {
-    if (m < -1000.0f) return 0xFFFF;
-    if (m > 31767.5f) return 0xFFFE;
+    if (m < -1000.0f) return 0x0000;
+    if (m > 31767.5f) return 0x0000;
     return (uint16_t)round((m + 1000.0f) * 2.0f);
 }
 
@@ -265,7 +265,7 @@ int gb46750_encode(const gb46750_data_t *data, uint8_t *out, size_t max_len) {
         out[pos++] = (uint8_t)local.ts_acc;
     }
 
-    out[2] = pos;
+    out[2] = pos - 6;
     return (int)pos;
 }
 
@@ -278,11 +278,9 @@ void gb46750_from_config(const rid_config_t *cfg, gb46750_data_t *out) {
 
     // 复制 UAS ID
     strncpy(out->uas_id, cfg->uas_id, 20);
-    out->uas_id[20] = '\0';
 
     // 实名登记标志 (固定为已登记)
-    strncpy(out->reg_mark, "ESP32REG", 8);
-    out->reg_mark[8] = '\0';
+    strncpy(out->reg_mark, cfg->reg_mark, 8);
 
     // 运行类别 (默认开放类)
     out->op_category = GB_OP_CATEGORY_OPEN;
@@ -335,5 +333,13 @@ void gb46750_from_config(const rid_config_t *cfg, gb46750_data_t *out) {
     out->timestamp = encode_timestamp();
     out->ts_acc = get_ts_acc();
 
-    // 标志位将在编码时自动计算
+    // 标志位将在编码时自动计算    
+    out->op_category = (gb_op_category_t)cfg->op_category;
+    out->ua_class = (gb_ua_class_t)cfg->ua_class;
+    out->gcs_pos_type = (gb_gcs_pos_type_t)cfg->gcs_pos_type;
+    out->coord_type = (gb_coord_type_t)cfg->coord_type;
+    out->h_acc = (gb_hacc_t)cfg->h_acc;
+    out->v_acc = (gb_vacc_t)cfg->v_acc;
+    out->spd_acc = (gb_spd_acc_t)cfg->spd_acc;
+    out->ts_acc = (gb_ts_acc_t)cfg->ts_acc;
 }

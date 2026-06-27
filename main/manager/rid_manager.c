@@ -29,14 +29,6 @@ static TaskHandle_t s_dispatcher_task = NULL;
 static drone_instance_t *s_head = NULL;
 static drone_instance_t *s_current_instance = NULL;  // 当前正在广播的实例
 
-// 持久化结构
-typedef struct {
-    uint32_t id;
-    rid_standard_t standard;
-    bool active;
-    uint8_t message_counter;
-    rid_config_t config;
-} instance_persist_t;
 
 // ==================== 内部辅助函数 ====================
 static void lock(void) {
@@ -249,6 +241,10 @@ esp_err_t rid_manager_update_standard(uint32_t id, rid_standard_t standard) {
 }
 
 
+// rid_manager.c 中相关代码
+
+#define INST_PERSIST_MAGIC   0x52494449
+#define INST_PERSIST_VERSION 1
 // ==================== NVS 持久化 ====================
 esp_err_t rid_manager_save_all(void) {
     lock();
@@ -260,17 +256,20 @@ esp_err_t rid_manager_save_all(void) {
     int count = 0;
     drone_instance_t *cur = s_head;
     while (cur) { count++; cur = cur->next; }
+    unlock();
 
     instance_persist_t *arr = malloc(count * sizeof(instance_persist_t));
     if (!arr) {
-        unlock();
         ESP_LOGE(TAG, "malloc failed");
         return ESP_ERR_NO_MEM;
     }
 
+    lock();
     cur = s_head;
     int idx = 0;
     while (cur && idx < count) {
+        arr[idx].magic = INST_PERSIST_MAGIC;
+        arr[idx].version = INST_PERSIST_VERSION;
         arr[idx].id = cur->id;
         arr[idx].standard = cur->standard;
         arr[idx].active = cur->active;
@@ -296,7 +295,7 @@ esp_err_t rid_manager_save_all(void) {
     err = nvs_set_blob(handle, INST_NVS_KEY, arr, count * sizeof(instance_persist_t));
     if (err == ESP_OK) {
         err = nvs_commit(handle);
-        ESP_LOGI(TAG, "Saved %d instances", count);
+        ESP_LOGI(TAG, "Saved %d instances (version %d)", count, INST_PERSIST_VERSION);
     } else {
         ESP_LOGE(TAG, "nvs_set_blob failed: %s", esp_err_to_name(err));
     }
@@ -314,14 +313,16 @@ esp_err_t rid_manager_load_all(void) {
     err = nvs_get_blob(handle, INST_NVS_KEY, NULL, &blob_size);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         nvs_close(handle);
-        return ESP_ERR_NOT_FOUND;  // 不清理链表，保留现有
+        return ESP_ERR_NOT_FOUND;
     } else if (err != ESP_OK) {
         nvs_close(handle);
         return err;
     }
 
-    // 读取成功，清空并重建
-    rid_manager_clear_all();
+    if (blob_size == 0) {
+        nvs_close(handle);
+        return ESP_ERR_INVALID_SIZE;
+    }
 
     instance_persist_t *arr = malloc(blob_size);
     if (!arr) {
@@ -337,6 +338,36 @@ esp_err_t rid_manager_load_all(void) {
     }
 
     int count = blob_size / sizeof(instance_persist_t);
+    if (count == 0) {
+        free(arr);
+        nvs_close(handle);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    // 检查版本兼容性
+    bool version_mismatch = false;
+    for (int i = 0; i < count; i++) {
+        if (arr[i].magic != INST_PERSIST_MAGIC || arr[i].version != INST_PERSIST_VERSION) {
+            version_mismatch = true;
+            ESP_LOGW(TAG, "Instance %d has invalid magic/version (magic=0x%08X, ver=%d), resetting NVS",
+                     i, arr[i].magic, arr[i].version);
+            break;
+        }
+    }
+
+    if (version_mismatch) {
+        // 版本不匹配，清除 NVS 键值，返回错误
+        nvs_erase_key(handle, INST_NVS_KEY);
+        nvs_commit(handle);
+        free(arr);
+        nvs_close(handle);
+        return ESP_ERR_INVALID_VERSION;
+    }
+
+    // 清空现有实例并重建
+    rid_manager_clear_all();
+
+    uint32_t max_id = 0;
     for (int i = 0; i < count; i++) {
         instance_persist_t *p = &arr[i];
         drone_instance_t *inst = malloc(sizeof(drone_instance_t));
@@ -352,12 +383,15 @@ esp_err_t rid_manager_load_all(void) {
         inst->next = s_head;
         s_head = inst;
         unlock();
-        if (p->id > s_next_id) s_next_id = p->id + 1;
+        if (p->id > max_id) max_id = p->id;
     }
+    s_next_id = max_id + 1;
+
     free(arr);
     nvs_close(handle);
     return ESP_OK;
 }
+
 
 #include "freertos/queue.h"
 

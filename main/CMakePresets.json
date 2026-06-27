@@ -1,0 +1,40 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "default",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "esp32",
+            "inherits": "default",
+            "binaryDir": "${sourceDir}/build_esp32",
+            "cacheVariables": {
+                "IDF_TARGET": "esp32"
+            }
+        },
+        {
+            "name": "esp32c3",
+            "inherits": "default",
+            "binaryDir": "${sourceDir}/build_esp32c3",
+            "cacheVariables": {
+                "IDF_TARGET": "esp32c3"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "esp32",
+            "configurePreset": "esp32"
+        },
+        {
+            "name": "esp32c3",
+            "configurePreset": "esp32c3"
+        }
+    ]
+}

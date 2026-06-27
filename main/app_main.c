@@ -16,24 +16,6 @@
 
 static const char *TAG = "RID_MAIN";
 
-// 设置 MAC 地址（自动适配）
-static void init_mac_address(void) {
-    uint8_t mac[6];
-    esp_err_t ret = esp_efuse_mac_get_default(mac);
-    if (ret == ESP_OK) {
-        // EFUSE MAC 有效，使用板载 MAC
-        esp_base_mac_addr_set(mac);
-        ESP_LOGI(TAG, "Using onboard MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    } else {
-        // EFUSE MAC 无效（CRC 错误），使用自定义 MAC
-        uint8_t custom_mac[6] = {0x24, 0x0A, 0xC4, 0x00, 0x00, 0x01};
-        esp_base_mac_addr_set(custom_mac);
-        ESP_LOGW(TAG, "EFUSE MAC CRC error, using custom MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-                 custom_mac[0], custom_mac[1], custom_mac[2],
-                 custom_mac[3], custom_mac[4], custom_mac[5]);
-    }
-}
 
 void app_main(void) {
     ESP_LOGI(TAG, "=== ESP32 Multi-Standard Remote ID Simulator ===");
@@ -62,16 +44,24 @@ void app_main(void) {
     rid_manager_init();
 
     ret = rid_manager_load_all();
-    if (ret != ESP_OK) {
-        // 没有存储的实例，创建默认
-        ESP_LOGW(TAG, "No instances stored, creating default");
+    if (ret == ESP_ERR_INVALID_VERSION) {
+        ESP_LOGW(TAG, "NVS data version mismatch, resetting and creating default instance");
+        // 擦除 NVS 键值（已在 load_all 中擦除，但为了保险，再擦一次）
+        nvs_handle_t handle;
+        if (nvs_open("rid_inst", NVS_READWRITE, &handle) == ESP_OK) {
+            nvs_erase_key(handle, "inst_list");
+            nvs_commit(handle);
+            nvs_close(handle);
+        }
+        // 创建默认实例
         rid_config_t default_config;
         rid_config_init_default(&default_config);
+        // 设置初始位置等...
         default_config.latitude = (float)g_rid_config.init_lat;
         default_config.longitude = (float)g_rid_config.init_lon;
         default_config.speed_horizontal = g_rid_config.speed;
         default_config.patrol_speed = g_rid_config.speed;
-
+       
         uint32_t id;
         ret = rid_manager_create(RID_STANDARD_GB42590, &default_config, &id);
         if (ret == ESP_OK) {
@@ -85,6 +75,16 @@ void app_main(void) {
         } else {
             ESP_LOGE(TAG, "Create instance failed: %s", esp_err_to_name(ret));
         }
+        ESP_LOGI(TAG, "Default instance created and saved");
+    } else if (ret == ESP_ERR_NOT_FOUND) {
+        // 无数据，同样创建默认实例
+        // 没有存储的实例，创建默认
+        ESP_LOGW(TAG, "No instances stored, creating default");
+        rid_config_t default_config;
+        rid_config_init_default(&default_config);
+        // ...
+    } else if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "load_all failed: %s", esp_err_to_name(ret));
     } else {
         ESP_LOGI(TAG, "Instances loaded successfully");
         // 查找第一个 active 实例并启动（实际上启动函数会停止其他）
